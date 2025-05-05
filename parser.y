@@ -38,17 +38,17 @@ vector<Pending_var> decl_vars;
 vector<ExtendedType*> func_params_type;
 vector<ExtendedType*> type_pool;
 
-static void semantic_error(const string& msg, const string& id){
+static void semantic_error(const string& msg, const string& id) {
     cerr << "SEMANTIC(" << linenum << "): " << msg << ' ' << id << '\n';
     for (auto& ptr : type_pool) delete ptr;
     exit(-1);
 }
 
 static bool type_compatible(const ExtendedType* dst, const ExtendedType* src) {
-    if (*dst == *src)                                 return true;
-    if (dst == T_STRING || src == T_STRING)           return false;
-    if (dst == T_FLOAT  && src == T_INT)              return true;
-    if (dst == T_INT    && src == T_FLOAT)            return true;
+    if (*dst == *src)                                      return true;
+    if (dst == T_STRING || src == T_STRING)                return false;
+    if (dst == T_FLOAT  && src == T_INT)                   return true;
+    if (dst == T_INT    && src == T_FLOAT)                 return true;
     if ((dst == T_INT || dst == T_FLOAT) && src == T_BOOL) return true;
     return false;
 }
@@ -68,7 +68,7 @@ static ExtendedType* current_func_type = T_ERROR;
 static bool has_main_func = false;
 %}
 
-%union{
+%union {
     int            ival;
     float          fval;
     char*          sval;
@@ -154,7 +154,7 @@ var_decl
                 semantic_error("type mismatch in init", "");
         }
         decl_vars.clear();
-      }
+    }
     ;
 
 ident_init_list
@@ -163,18 +163,14 @@ ident_init_list
     ;
 
 ident_init
-    : identifier array_block {
-        decl_vars.push_back({$1, $2});
-      }
-    | identifier '=' const_expr { 
-        decl_vars.push_back({$1, $3});
-      }
+    : identifier array_block 
+      { decl_vars.push_back({$1, $2}); }
+    | identifier '=' const_expr 
+      { decl_vars.push_back({$1, $3}); }
     ;
 
 array_block
-    : /* empty */ {
-        $$ = T_ERROR;
-    }
+    : /* empty */ { $$ = T_ERROR; }
     | '[' ICONST ']' array_block {
         vector<int> dims;
         dims.push_back($2);
@@ -184,26 +180,27 @@ array_block
         type_pool.push_back(nt);
         $$ = nt;
     }
+    ;
 
 /* ───────── 函式定義 ───────── */
 func_def
     : type_spec identifier {
-          if (!symtab.insert($2, Kind::K_FUNC, *$1, {})) 
-              semantic_error("redeclared func", $2);
-          if (string($2) == "main") 
-              has_main_func = true;
-          if (invalid_main_function($1->t, $2)) 
-              semantic_error("invalid main function type:", SymbolTable::type2Str($1->t));
-          current_func_type = $1;
-          symtab.pushScope();
-      } '(' param_list_opt ')' block {
-          symtab.popScope();
-          Symbol *sym = symtab.lookup($2);
-          for (auto* p : func_params_type)
-            sym->params.push_back(*p);
-          func_params_type.clear();
-          current_func_type = T_ERROR;
-      }
+        if (!symtab.insert($2, Kind::K_FUNC, *$1, {})) 
+            semantic_error("redeclared func", $2);
+        if (string($2) == "main") 
+            has_main_func = true;
+        if (invalid_main_function($1->t, $2)) 
+            semantic_error("invalid main function type:", SymbolTable::type2Str($1->t));
+        current_func_type = $1;
+        symtab.pushScope();
+    } '(' param_list_opt ')' block {
+        symtab.popScope();
+        Symbol *sym = symtab.lookup($2);
+        for (auto* p : func_params_type)
+        sym->params.push_back(*p);
+        func_params_type.clear();
+        current_func_type = T_ERROR;
+    }
     ;
 
 param_list_opt : /* empty */ | param_list ;
@@ -215,11 +212,11 @@ param_list
 
 param
     : type_spec identifier array_block { 
-          if (!symtab.insert($2, Kind::K_VAR, ExtendedType{$1->t, $3->dims}, {}))
-              semantic_error("redeclared param", $2);
-          func_params_type.push_back(new ExtendedType{ $1->t, $3->dims });
-          type_pool.push_back(func_params_type.back());
-      }
+        if (!symtab.insert($2, Kind::K_VAR, ExtendedType{$1->t, $3->dims}, {}))
+            semantic_error("redeclared param", $2);
+        func_params_type.push_back(new ExtendedType{ $1->t, $3->dims });
+        type_pool.push_back(func_params_type.back());
+    }
     ;
 
 /* ───────── Block & Statement ───────── */
@@ -259,7 +256,7 @@ simple_stmt
         if (!sym) semantic_error("undeclared id",$1);
         else if (!type_compatible(&sym->type, $3)) 
             semantic_error("type mismatch in assignment", $1);
-      }
+    }
     | identifier INC 
     | identifier DEC 
     | PRINT   expr 
@@ -325,33 +322,33 @@ foreach_stmt
 
 return_stmt
     : RETURN expr ';' {
-          if (current_func_type == T_VOID)
-              semantic_error("void function should not return value", "");
-          else if (!type_compatible(current_func_type, $2))
-              semantic_error("return type mismatch", "");
+        if (current_func_type == T_VOID)
+            semantic_error("void function should not return value", "");
+        else if (!type_compatible(current_func_type, $2))
+            semantic_error("return type mismatch", "");
       }
     ;
 
 /* ───────── Expression ───────── */
 expr
     : expr '+' expr { 
-          ExtendedType* t = promote($1, $3);
-          if (t == T_ERROR) 
-              semantic_error("invalid operation", "");
-          $$ = t;
-      }
+        ExtendedType* t = promote($1, $3);
+        if (t == T_ERROR) 
+            semantic_error("invalid operation", "");
+        $$ = t;
+    }
     | expr '-' expr { 
-          ExtendedType* t = promote($1, $3);
-          if (t == T_ERROR) 
-              semantic_error("invalid operation", "");
-          $$ = t; 
-      }
+        ExtendedType* t = promote($1, $3);
+        if (t == T_ERROR) 
+            semantic_error("invalid operation", "");
+        $$ = t; 
+    }
     | expr '*' expr {
-          ExtendedType* t = promote($1, $3);
-          if (t == T_ERROR) 
-              semantic_error("invalid operation", "");
-          $$ = t; 
-      }
+        ExtendedType* t = promote($1, $3);
+        if (t == T_ERROR) 
+            semantic_error("invalid operation", "");
+        $$ = t; 
+    }
     | expr '/' expr {
           ExtendedType* t = promote($1, $3);
           if (t == T_ERROR) 
@@ -359,10 +356,10 @@ expr
           $$ = t; 
     }
     | expr '%' expr {
-          ExtendedType* t = promote($1, $3);
-          if (t == T_ERROR) 
-              semantic_error("invalid operation", "");
-          $$ = t; 
+        ExtendedType* t = promote($1, $3);
+        if (t == T_ERROR) 
+            semantic_error("invalid operation", "");
+        $$ = t; 
     }
     | '-' expr %prec UMINUS  { $$ = $2; }
     | '(' expr ')'           { $$ = $2; }
@@ -374,7 +371,7 @@ expr
         Symbol* sym = symtab.lookup($1);
         if (!sym) semantic_error("undeclared var",$1);
         $$ = sym ? &sym->type : (ExtendedType*)T_ERROR;
-      }
+    }
     | identifier '(' arg_list_opt ')' {
         Symbol* sym = symtab.lookup($1);
         if (!sym || sym->kind != Kind::K_FUNC)
@@ -386,7 +383,7 @@ expr
                 semantic_error("function parameter type mismatch in call to function: ", $1);
         func_params_type.clear();
         $$ = sym ? &sym->type : (ExtendedType*)T_ERROR;
-      }
+    }
     | boolean_expr
     ;
 
@@ -394,30 +391,30 @@ boolean_expr
     : expr EQ expr { 
         if (!type_compatible($1, $3)) semantic_error("expression type mismatch", ""); 
         $$ = T_BOOL;
-      }
+    }
     | expr NE expr { 
         if (!type_compatible($1, $3)) semantic_error("expression type mismatch", ""); 
         $$ = T_BOOL;
-      }
+    }
     | expr '>' expr { 
         if (!type_compatible($1, $3)) semantic_error("expression type mismatch", ""); 
         $$ = T_BOOL;
-      }
+    }
     | expr '<' expr { 
         if (!type_compatible($1, $3)) semantic_error("expression type mismatch", ""); 
         $$ = T_BOOL;
-      }
+    }
     | expr LE expr  { 
         if (!type_compatible($1, $3)) semantic_error("expression type mismatch", ""); 
         $$ = T_BOOL;
-      }
+    }
     | expr GE expr  { 
         if (!type_compatible($1, $3)) semantic_error("expression type mismatch", ""); 
         $$ = T_BOOL;
-      }
+    }
     | '!' expr {
         $$ = T_BOOL;
-      }
+    }
     | expr AND expr {
         $$ = T_BOOL;
     }
@@ -452,12 +449,10 @@ arg_list_opt
 
 
 arg_list
-    : expr {
-        func_params_type.push_back($1);
-    }
-    | arg_list ',' expr {
-        func_params_type.push_back($3);
-    }
+    : expr 
+      { func_params_type.push_back($1); }
+    | arg_list ',' expr 
+      { func_params_type.push_back($3); }
     ;
 
 %%           
