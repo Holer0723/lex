@@ -24,7 +24,7 @@ bool SymbolTable::insert(const string& id, Kind kind, ExtendedType type, vector<
     return scopes.back().emplace(id, sym).second;
 }
 
-const Symbol* SymbolTable::lookup(const string& id) const {
+Symbol* SymbolTable::lookup(const string& id) {
     for (auto it = scopes.rbegin(); it != scopes.rend(); ++it) {
         auto f = it->find(id);
         if (f != it->end()) return &f->second;
@@ -61,11 +61,11 @@ const string SymbolTable::kind2Str(Kind k) {
 
 const string SymbolTable::type2Str(Type t) {
     switch (t) {
-        case Type::T_INT:    return "INT";
-        case Type::T_FLOAT:  return "FLOAT";
-        case Type::T_BOOL:   return "BOOL";
-        case Type::T_STRING: return "STRING";
-        case Type::T_VOID:   return "VOID";
+        case Type::INT:    return "INT";
+        case Type::FLOAT:  return "FLOAT";
+        case Type::BOOL:   return "BOOL";
+        case Type::STRING: return "STRING";
+        case Type::VOID:   return "VOID";
         default:           return "ERROR";
     }
 }

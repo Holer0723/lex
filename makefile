@@ -7,7 +7,7 @@ CXX       = g++
 CXXFLAGS  = -std=c++11 -g -Wall
 
 # 執行檔名稱
-TARGET    = mycompiler.o
+TARGET    = mycompiler
 
 # 中間檔
 Y_TAB_C   = y.tab.c

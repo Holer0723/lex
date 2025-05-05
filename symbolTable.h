@@ -8,12 +8,12 @@
 using namespace std;
 
 enum class Type {
-    T_INT,
-    T_FLOAT,
-    T_BOOL,
-    T_STRING,
-    T_VOID,     
-    T_ERROR     
+    INT,
+    FLOAT,
+    BOOL,
+    STRING,
+    VOID,     
+    ERROR     
 };
 
 enum class Kind {
@@ -53,7 +53,7 @@ public:
 
     bool insert(const string& id, Kind kind, ExtendedType type, vector<ExtendedType> params);
 
-    const Symbol* lookup(const string& id) const;
+    Symbol* lookup(const string& id);
 
     void dump();
 };

@@ -75,68 +75,69 @@
 #include <vector>
 #include "symbolTable.h"
 
-#define TRACE(t) printf(t)
-
-
 using namespace std;
+
+static ExtendedType _T_STRING{Type::STRING,{}};
+static ExtendedType _T_BOOL  {Type::BOOL  ,{}};
+static ExtendedType _T_INT   {Type::INT   ,{}};
+static ExtendedType _T_FLOAT {Type::FLOAT ,{}};
+static ExtendedType _T_VOID  {Type::VOID  ,{}};
+static ExtendedType _T_ERROR {Type::ERROR ,{}};
+
+#define TRACE(t) printf(t)
+#define  T_STRING (&_T_STRING)
+#define  T_BOOL   (&_T_BOOL)
+#define  T_INT    (&_T_INT)
+#define  T_FLOAT  (&_T_FLOAT)
+#define  T_VOID   (&_T_VOID)
+#define  T_ERROR  (&_T_ERROR)
+
+struct Pending_var {
+    string        id;
+    ExtendedType* type;
+};
+
 extern FILE* yyin;
-
-#define YYSTYPE_IS_DECLARED 1
-typedef union {
-    int          ival;
-    float        fval;
-    char*        sval;
-    ExtendedType tval;    
-} YYSTYPE;
-
 SymbolTable symtab;
 extern int linenum;                    
+
 void yyerror(const string& msg);
-const static ExtendedType T_STRING = ExtendedType{Type::T_STRING, {}};
-const static ExtendedType T_BOOL   = ExtendedType{Type::T_BOOL, {}};
-const static ExtendedType T_INT    = ExtendedType{Type::T_INT, {}};
-const static ExtendedType T_FLOAT  = ExtendedType{Type::T_FLOAT, {}};
-const static ExtendedType T_VOID   = ExtendedType{Type::T_VOID, {}};
-const static ExtendedType T_ERROR  = ExtendedType{Type::T_ERROR, {}};
+int yylex(void);
+
+vector<Pending_var> decl_vars;
+vector<ExtendedType*> func_params_type;
+vector<ExtendedType*> type_pool;
 
 static void semantic_error(const string& msg, const string& id){
     cerr << "SEMANTIC(" << linenum << "): " << msg << ' ' << id << '\n';
+    for (auto& ptr : type_pool) delete ptr;
     exit(-1);
 }
 
-static bool type_compatible(ExtendedType dst, ExtendedType src) {
-    if (dst == src)                                  return true;
-    if (dst == T_STRING || src == T_STRING)  return false;
-    if (dst == T_FLOAT && src == T_INT)      return true;
-    if (dst == T_INT && src == T_FLOAT)      return true;
+static bool type_compatible(const ExtendedType* dst, const ExtendedType* src) {
+    if (*dst == *src)                                 return true;
+    if (dst == T_STRING || src == T_STRING)           return false;
+    if (dst == T_FLOAT  && src == T_INT)              return true;
+    if (dst == T_INT    && src == T_FLOAT)            return true;
     if ((dst == T_INT || dst == T_FLOAT) && src == T_BOOL) return true;
     return false;
 }
 
-static ExtendedType promote(ExtendedType ta, ExtendedType tb) {
-    if (ta == T_ERROR || tb == T_ERROR)   return T_ERROR;
-    if (ta == T_STRING || tb == T_STRING) return T_ERROR;
-    if (ta == T_FLOAT || tb == T_FLOAT)   return T_FLOAT;
+static ExtendedType* promote(const ExtendedType* a, const ExtendedType* b) {
+    if (a == T_ERROR || b == T_ERROR)   return T_ERROR;
+    if (a == T_STRING || b == T_STRING) return T_ERROR;
+    if (a == T_FLOAT  || b == T_FLOAT)  return T_FLOAT;
     return T_INT;
 }
 
 static bool invalid_main_function(Type t, string func_id) {
-    return func_id == "main" && t != Type::T_VOID;
+    return func_id == "main" && t != Type::VOID;
 }
 
-static ExtendedType current_func_type = T_ERROR;
+static ExtendedType* current_func_type = T_ERROR;
 static bool has_main_func = false;
 
-struct Pending_var {
-    string       id;
-    ExtendedType type;
-};
-
-vector<Pending_var> decl_vars;
-vector<ExtendedType> func_params_type;
-int yylex(void);
-
-#line 140 "y.tab.c"
+#line 141 "y.tab.c"
 
 # ifndef YY_CAST
 #  ifdef __cplusplus
@@ -266,6 +267,23 @@ extern int yydebug;
 #define DEC 295
 
 /* Value type.  */
+#if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
+union YYSTYPE
+{
+#line 71 "parser.y"
+
+    int            ival;
+    float          fval;
+    char*          sval;
+    ExtendedType*  tval;
+
+#line 281 "y.tab.c"
+
+};
+typedef union YYSTYPE YYSTYPE;
+# define YYSTYPE_IS_TRIVIAL 1
+# define YYSTYPE_IS_DECLARED 1
+#endif
 
 
 extern YYSTYPE yylval;
@@ -760,15 +778,15 @@ static const yytype_int8 yytranslate[] =
 /* YYRLINE[YYN] -- Source line where rule number YYN was defined.  */
 static const yytype_int16 yyrline[] =
 {
-       0,   111,   111,   116,   117,   121,   122,   123,   128,   139,
-     153,   154,   158,   161,   167,   170,   180,   180,   198,   198,
-     201,   202,   206,   215,   219,   220,   224,   225,   230,   231,
-     232,   233,   234,   235,   236,   240,   241,   245,   254,   255,
-     256,   257,   258,   259,   263,   265,   270,   275,   280,   293,
-     302,   310,   318,   328,   334,   340,   346,   352,   358,   359,
-     360,   361,   362,   363,   364,   369,   375,   379,   383,   387,
-     391,   395,   399,   403,   406,   409,   415,   416,   417,   418,
-     422,   423,   424,   425,   426,   430,   434,   435,   440,   441
+       0,   119,   119,   124,   125,   129,   130,   131,   136,   147,
+     161,   162,   166,   169,   175,   178,   190,   190,   209,   209,
+     212,   213,   217,   227,   231,   232,   236,   237,   242,   243,
+     244,   245,   246,   247,   248,   252,   253,   257,   263,   264,
+     265,   266,   267,   268,   272,   274,   279,   284,   289,   302,
+     311,   319,   327,   337,   343,   349,   355,   361,   367,   368,
+     369,   370,   371,   372,   373,   378,   390,   394,   398,   402,
+     406,   410,   414,   418,   421,   424,   430,   431,   432,   433,
+     437,   438,   439,   440,   441,   445,   449,   450,   455,   458
 };
 #endif
 
@@ -1458,467 +1476,490 @@ yyreduce:
   switch (yyn)
     {
   case 2: /* program: decl_list  */
-#line 111 "parser.y"
+#line 119 "parser.y"
                               { TRACE("program OK\n"); }
-#line 1464 "y.tab.c"
+#line 1482 "y.tab.c"
     break;
 
   case 8: /* const_decl: CONST type_spec identifier '=' const_expr ';'  */
-#line 128 "parser.y"
+#line 136 "parser.y"
                                                     {
-        if (!symtab.insert((yyvsp[-3].sval), Kind::K_CONST, (yyvsp[-4].tval), {}))
-            semantic_error("redeclared const",(yyvsp[-3].sval));
+        if (!symtab.insert((yyvsp[-3].sval), Kind::K_CONST, *(yyvsp[-4].tval), {}))
+            semantic_error("redeclared const", (yyvsp[-3].sval));
         if ((yyvsp[-4].tval) != (yyvsp[-1].tval))
-            semantic_error("const type mismatch",(yyvsp[-3].sval));
+            semantic_error("const type mismatch", (yyvsp[-3].sval));
       }
-#line 1475 "y.tab.c"
+#line 1493 "y.tab.c"
     break;
 
   case 9: /* var_decl: type_spec ident_init_list ';'  */
-#line 139 "parser.y"
+#line 147 "parser.y"
                                     { 
         for (auto& var : decl_vars) {
             string name = var.id;
-            ExtendedType type = var.type;
-            if (!symtab.insert(name, Kind::K_VAR, ExtendedType{(yyvsp[-2].tval).t, type.dims}, {}))
+            ExtendedType* type = var.type;
+            if (!symtab.insert(name, Kind::K_VAR, ExtendedType{(yyvsp[-2].tval)->t, type->dims}, {}))
                 semantic_error("redeclared var", name);
-            if (type.t != Type::T_ERROR && !type_compatible(type, (yyvsp[-2].tval)))
+            if (type->t != Type::ERROR && !type_compatible(type, (yyvsp[-2].tval)))
                 semantic_error("type mismatch in init", "");
         }
         decl_vars.clear();
       }
-#line 1491 "y.tab.c"
+#line 1509 "y.tab.c"
     break;
 
   case 12: /* ident_init: identifier array_block  */
-#line 158 "parser.y"
+#line 166 "parser.y"
                              {
         decl_vars.push_back({(yyvsp[-1].sval), (yyvsp[0].tval)});
       }
-#line 1499 "y.tab.c"
+#line 1517 "y.tab.c"
     break;
 
   case 13: /* ident_init: identifier '=' const_expr  */
-#line 161 "parser.y"
+#line 169 "parser.y"
                                 { 
         decl_vars.push_back({(yyvsp[-2].sval), (yyvsp[0].tval)});
       }
-#line 1507 "y.tab.c"
+#line 1525 "y.tab.c"
     break;
 
   case 14: /* array_block: %empty  */
-#line 167 "parser.y"
+#line 175 "parser.y"
                   {
-        (yyval.tval) = ExtendedType{Type::T_ERROR, {}};
+        (yyval.tval) = T_ERROR;
     }
-#line 1515 "y.tab.c"
+#line 1533 "y.tab.c"
     break;
 
   case 15: /* array_block: '[' ICONST ']' array_block  */
-#line 170 "parser.y"
+#line 178 "parser.y"
                                  {
         vector<int> dims;
         dims.push_back((yyvsp[-2].ival));
-        for (auto& d : (yyvsp[0].tval).dims)
+        for (auto& d : (yyvsp[0].tval)->dims)
             dims.push_back(d);
-        (yyval.tval) = ExtendedType{Type::T_ERROR, dims};
+        ExtendedType* nt = new ExtendedType{Type::ERROR, dims};
+        type_pool.push_back(nt);
+        (yyval.tval) = nt;
     }
-#line 1527 "y.tab.c"
+#line 1547 "y.tab.c"
     break;
 
   case 16: /* $@1: %empty  */
-#line 180 "parser.y"
+#line 190 "parser.y"
                            {
-          if (!symtab.insert((yyvsp[0].sval), Kind::K_FUNC, (yyvsp[-1].tval), {})) 
+          if (!symtab.insert((yyvsp[0].sval), Kind::K_FUNC, *(yyvsp[-1].tval), {})) 
               semantic_error("redeclared func", (yyvsp[0].sval));
           if (string((yyvsp[0].sval)) == "main") 
               has_main_func = true;
-          if (invalid_main_function((yyvsp[-1].tval).t, (yyvsp[0].sval))) 
-              semantic_error("invalid main function type:", SymbolTable::type2Str((yyvsp[-1].tval).t));
+          if (invalid_main_function((yyvsp[-1].tval)->t, (yyvsp[0].sval))) 
+              semantic_error("invalid main function type:", SymbolTable::type2Str((yyvsp[-1].tval)->t));
           current_func_type = (yyvsp[-1].tval);
           symtab.pushScope();
       }
-#line 1542 "y.tab.c"
+#line 1562 "y.tab.c"
     break;
 
   case 17: /* func_def: type_spec identifier $@1 '(' param_list_opt ')' block  */
-#line 189 "parser.y"
+#line 199 "parser.y"
                                      {
           symtab.popScope();
-          const Symbol *sym = symtab.lookup((yyvsp[-5].sval));
-          sym->params = std::move(func_params_type);
+          Symbol *sym = symtab.lookup((yyvsp[-5].sval));
+          for (auto* p : func_params_type)
+            sym->params.push_back(*p);
           func_params_type.clear();
           current_func_type = T_ERROR;
       }
-#line 1554 "y.tab.c"
+#line 1575 "y.tab.c"
     break;
 
   case 22: /* param: type_spec identifier array_block  */
-#line 206 "parser.y"
+#line 217 "parser.y"
                                        { 
-          if (!symtab.insert((yyvsp[-1].sval), Kind::K_VAR, ExtendedType{(yyvsp[-2].tval).t, (yyvsp[0].tval).dims}, {}))
+          if (!symtab.insert((yyvsp[-1].sval), Kind::K_VAR, ExtendedType{(yyvsp[-2].tval)->t, (yyvsp[0].tval)->dims}, {}))
               semantic_error("redeclared param", (yyvsp[-1].sval));
-          func_params_type.emplace_back((yyvsp[-2].tval).t, (yyvsp[0].tval).dims);
+          func_params_type.push_back(new ExtendedType{ (yyvsp[-2].tval)->t, (yyvsp[0].tval)->dims });
+          type_pool.push_back(func_params_type.back());
       }
-#line 1564 "y.tab.c"
+#line 1586 "y.tab.c"
     break;
 
   case 37: /* simple_stmt: identifier '=' expr  */
-#line 245 "parser.y"
+#line 257 "parser.y"
                           {
-        // cout << $1 << "<here>";
-        const Symbol* sym = symtab.lookup((yyvsp[-2].sval));
+        Symbol* sym = symtab.lookup((yyvsp[-2].sval));
         if (!sym) semantic_error("undeclared id",(yyvsp[-2].sval));
-          else if (!type_compatible(sym->type, (yyvsp[0].tval))) {
-              // cout << SymbolTable::type2Str(sym->type) << ' ' << SymbolTable::type2Str($3) << '\n';
-              semantic_error("type mismatch in assignment", (yyvsp[-2].sval));
-          }
+        else if (!type_compatible(&sym->type, (yyvsp[0].tval))) 
+            semantic_error("type mismatch in assignment", (yyvsp[-2].sval));
       }
-#line 1578 "y.tab.c"
+#line 1597 "y.tab.c"
     break;
 
   case 44: /* if_stmt: IF '(' boolean_expr ')' simple_or_block_stmt  */
-#line 264 "parser.y"
+#line 273 "parser.y"
       { if ((yyvsp[-2].tval) != T_BOOL) semantic_error("if cond not bool",""); }
-#line 1584 "y.tab.c"
+#line 1603 "y.tab.c"
     break;
 
   case 45: /* if_stmt: IF '(' boolean_expr ')' simple_or_block_stmt ELSE simple_or_block_stmt  */
-#line 266 "parser.y"
+#line 275 "parser.y"
       { if ((yyvsp[-4].tval) != T_BOOL) semantic_error("if cond not bool",""); }
-#line 1590 "y.tab.c"
+#line 1609 "y.tab.c"
     break;
 
   case 46: /* while_stmt: WHILE '(' boolean_expr ')' simple_or_block_stmt  */
-#line 271 "parser.y"
+#line 280 "parser.y"
       { if ((yyvsp[-2].tval) != T_BOOL) semantic_error("if cond not bool",""); }
-#line 1596 "y.tab.c"
+#line 1615 "y.tab.c"
     break;
 
   case 47: /* for_stmt: FOR '(' simple_stmt ';' boolean_expr ';' simple_stmt ')' simple_or_block_stmt  */
-#line 276 "parser.y"
+#line 285 "parser.y"
       { if ((yyvsp[-4].tval) != T_BOOL) semantic_error("if cond not bool",""); }
-#line 1602 "y.tab.c"
+#line 1621 "y.tab.c"
     break;
 
   case 48: /* foreach_stmt: FOREACH '(' identifier ':' identifier '.' '.' identifier ')' simple_or_block_stmt  */
-#line 280 "parser.y"
+#line 289 "parser.y"
                                                                                        {
-        const Symbol* sym = symtab.lookup((yyvsp[-7].sval));
+        Symbol* sym = symtab.lookup((yyvsp[-7].sval));
         if (!sym) semantic_error("undeclared id", (yyvsp[-7].sval));
-        if (sym->type != T_INT) semantic_error("foreach loop variable must be of type int:", (yyvsp[-7].sval));
+        if (sym->type != *T_INT) semantic_error("foreach loop variable must be of type int:", (yyvsp[-7].sval));
 
-        const Symbol* sym2 = symtab.lookup((yyvsp[-5].sval));
+        Symbol* sym2 = symtab.lookup((yyvsp[-5].sval));
         if (!sym2) semantic_error("undeclared id", (yyvsp[-5].sval));
-        if (sym2->type != T_INT) semantic_error("foreach loop range must be of type int:", (yyvsp[-5].sval));
-        const Symbol* sym3 = symtab.lookup((yyvsp[-2].sval));
+        if (sym2->type != *T_INT) semantic_error("foreach loop range must be of type int:", (yyvsp[-5].sval));
+        Symbol* sym3 = symtab.lookup((yyvsp[-2].sval));
         if (!sym3) semantic_error("undeclared id", (yyvsp[-2].sval));
-        if (sym3->type != T_INT) semantic_error("foreach loop range must be of type int:", (yyvsp[-2].sval));
+        if (sym3->type != *T_INT) semantic_error("foreach loop range must be of type int:", (yyvsp[-2].sval));
 
     }
-#line 1620 "y.tab.c"
+#line 1639 "y.tab.c"
     break;
 
   case 49: /* foreach_stmt: FOREACH '(' identifier ':' identifier '.' '.' ICONST ')' simple_or_block_stmt  */
-#line 293 "parser.y"
+#line 302 "parser.y"
                                                                                    {
-        const Symbol* sym = symtab.lookup((yyvsp[-7].sval));
+        Symbol* sym = symtab.lookup((yyvsp[-7].sval));
         if (!sym) semantic_error("undeclared id", (yyvsp[-7].sval));
-        if (sym->type != T_INT) semantic_error("foreach loop variable must be of type int:", (yyvsp[-7].sval));
+        if (sym->type != *T_INT) semantic_error("foreach loop variable must be of type int:", (yyvsp[-7].sval));
 
-        const Symbol* sym2 = symtab.lookup((yyvsp[-5].sval));
+        Symbol* sym2 = symtab.lookup((yyvsp[-5].sval));
         if (!sym2) semantic_error("undeclared id", (yyvsp[-5].sval));
-        if (sym2->type != T_INT) semantic_error("foreach loop range must be of type int:", (yyvsp[-5].sval));
+        if (sym2->type != *T_INT) semantic_error("foreach loop range must be of type int:", (yyvsp[-5].sval));
     }
-#line 1634 "y.tab.c"
+#line 1653 "y.tab.c"
     break;
 
   case 50: /* foreach_stmt: FOREACH '(' identifier ':' ICONST '.' '.' identifier ')' simple_or_block_stmt  */
-#line 302 "parser.y"
+#line 311 "parser.y"
                                                                                    {
-        const Symbol* sym = symtab.lookup((yyvsp[-7].sval));
+        Symbol* sym = symtab.lookup((yyvsp[-7].sval));
         if (!sym) semantic_error("undeclared id", (yyvsp[-7].sval));
-        if (sym->type != T_INT) semantic_error("foreach loop variable must be of type int:", (yyvsp[-7].sval));
-        const Symbol* sym3 = symtab.lookup((yyvsp[-2].sval));
+        if (sym->type != *T_INT) semantic_error("foreach loop variable must be of type int:", (yyvsp[-7].sval));
+        Symbol* sym3 = symtab.lookup((yyvsp[-2].sval));
         if (!sym3) semantic_error("undeclared id", (yyvsp[-2].sval));
-        if (sym3->type != T_INT) semantic_error("foreach loop range must be of type int:", (yyvsp[-2].sval));
+        if (sym3->type != *T_INT) semantic_error("foreach loop range must be of type int:", (yyvsp[-2].sval));
     }
-#line 1647 "y.tab.c"
+#line 1666 "y.tab.c"
     break;
 
   case 51: /* foreach_stmt: FOREACH '(' identifier ':' ICONST '.' '.' ICONST ')' simple_or_block_stmt  */
-#line 310 "parser.y"
+#line 319 "parser.y"
                                                                                {
-        const Symbol* sym = symtab.lookup((yyvsp[-7].sval));
+        Symbol* sym = symtab.lookup((yyvsp[-7].sval));
         if (!sym) semantic_error("undeclared id", (yyvsp[-7].sval));
-        if (sym->type != T_INT) semantic_error("foreach loop variable must be of type int:", (yyvsp[-7].sval));
+        if (sym->type != *T_INT) semantic_error("foreach loop variable must be of type int:", (yyvsp[-7].sval));
     }
-#line 1657 "y.tab.c"
+#line 1676 "y.tab.c"
     break;
 
   case 52: /* return_stmt: RETURN expr ';'  */
-#line 318 "parser.y"
+#line 327 "parser.y"
                       {
           if (current_func_type == T_VOID)
               semantic_error("void function should not return value", "");
           else if (!type_compatible(current_func_type, (yyvsp[-1].tval)))
               semantic_error("return type mismatch", "");
       }
-#line 1668 "y.tab.c"
+#line 1687 "y.tab.c"
     break;
 
   case 53: /* expr: expr '+' expr  */
-#line 328 "parser.y"
+#line 337 "parser.y"
                     { 
-          ExtendedType t = promote((yyvsp[-2].tval), (yyvsp[0].tval));
+          ExtendedType* t = promote((yyvsp[-2].tval), (yyvsp[0].tval));
           if (t == T_ERROR) 
               semantic_error("invalid operation", "");
           (yyval.tval) = t;
       }
-#line 1679 "y.tab.c"
+#line 1698 "y.tab.c"
     break;
 
   case 54: /* expr: expr '-' expr  */
-#line 334 "parser.y"
+#line 343 "parser.y"
                     { 
-          ExtendedType t = promote((yyvsp[-2].tval), (yyvsp[0].tval));
+          ExtendedType* t = promote((yyvsp[-2].tval), (yyvsp[0].tval));
           if (t == T_ERROR) 
               semantic_error("invalid operation", "");
           (yyval.tval) = t; 
       }
-#line 1690 "y.tab.c"
+#line 1709 "y.tab.c"
     break;
 
   case 55: /* expr: expr '*' expr  */
-#line 340 "parser.y"
+#line 349 "parser.y"
                     {
-          ExtendedType t = promote((yyvsp[-2].tval), (yyvsp[0].tval));
+          ExtendedType* t = promote((yyvsp[-2].tval), (yyvsp[0].tval));
           if (t == T_ERROR) 
               semantic_error("invalid operation", "");
           (yyval.tval) = t; 
       }
-#line 1701 "y.tab.c"
+#line 1720 "y.tab.c"
     break;
 
   case 56: /* expr: expr '/' expr  */
-#line 346 "parser.y"
+#line 355 "parser.y"
                     {
-          ExtendedType t = promote((yyvsp[-2].tval), (yyvsp[0].tval));
+          ExtendedType* t = promote((yyvsp[-2].tval), (yyvsp[0].tval));
           if (t == T_ERROR) 
               semantic_error("invalid operation", "");
           (yyval.tval) = t; 
     }
-#line 1712 "y.tab.c"
+#line 1731 "y.tab.c"
     break;
 
   case 57: /* expr: expr '%' expr  */
-#line 352 "parser.y"
+#line 361 "parser.y"
                     {
-          ExtendedType t = promote((yyvsp[-2].tval), (yyvsp[0].tval));
+          ExtendedType* t = promote((yyvsp[-2].tval), (yyvsp[0].tval));
           if (t == T_ERROR) 
               semantic_error("invalid operation", "");
           (yyval.tval) = t; 
     }
-#line 1723 "y.tab.c"
+#line 1742 "y.tab.c"
     break;
 
   case 58: /* expr: '-' expr  */
-#line 358 "parser.y"
+#line 367 "parser.y"
                              { (yyval.tval) = (yyvsp[0].tval); }
-#line 1729 "y.tab.c"
+#line 1748 "y.tab.c"
     break;
 
   case 59: /* expr: '(' expr ')'  */
-#line 359 "parser.y"
+#line 368 "parser.y"
                              { (yyval.tval) = (yyvsp[-1].tval); }
-#line 1735 "y.tab.c"
+#line 1754 "y.tab.c"
     break;
 
   case 60: /* expr: ICONST  */
-#line 360 "parser.y"
+#line 369 "parser.y"
                              { (yyval.tval) = T_INT;   }
-#line 1741 "y.tab.c"
+#line 1760 "y.tab.c"
     break;
 
   case 61: /* expr: FCONST  */
-#line 361 "parser.y"
+#line 370 "parser.y"
                              { (yyval.tval) = T_FLOAT; }
-#line 1747 "y.tab.c"
+#line 1766 "y.tab.c"
     break;
 
   case 62: /* expr: SCONST  */
-#line 362 "parser.y"
+#line 371 "parser.y"
                              { (yyval.tval) = T_STRING;}
-#line 1753 "y.tab.c"
+#line 1772 "y.tab.c"
     break;
 
   case 63: /* expr: BCONST  */
-#line 363 "parser.y"
+#line 372 "parser.y"
                              { (yyval.tval) = T_BOOL;  }
-#line 1759 "y.tab.c"
+#line 1778 "y.tab.c"
     break;
 
   case 64: /* expr: identifier  */
-#line 364 "parser.y"
+#line 373 "parser.y"
                  {
-        const Symbol* sym = symtab.lookup((yyvsp[0].sval));
+        Symbol* sym = symtab.lookup((yyvsp[0].sval));
         if (!sym) semantic_error("undeclared var",(yyvsp[0].sval));
-        (yyval.tval) = sym ? sym->type : T_ERROR;
+        (yyval.tval) = sym ? &sym->type : (ExtendedType*)T_ERROR;
       }
-#line 1769 "y.tab.c"
+#line 1788 "y.tab.c"
     break;
 
   case 65: /* expr: identifier '(' arg_list_opt ')'  */
-#line 369 "parser.y"
+#line 378 "parser.y"
                                       {
-        const Symbol* sym = symtab.lookup((yyvsp[-3].sval));
+        Symbol* sym = symtab.lookup((yyvsp[-3].sval));
         if (!sym || sym->kind != Kind::K_FUNC)
             semantic_error("call of non-function", (yyvsp[-3].sval));
-        (yyval.tval) = sym ? sym->type : T_ERROR;
+        if (sym->params.size() != func_params_type.size())  
+            semantic_error("function parameter count mismatch in call to function: ", (yyvsp[-3].sval));
+        for (int i = 0; i < (int) sym->params.size(); ++i)
+            if (sym->params[i] != *func_params_type[i]) 
+                semantic_error("function parameter type mismatch in call to function: ", (yyvsp[-3].sval));
+        func_params_type.clear();
+        (yyval.tval) = sym ? &sym->type : (ExtendedType*)T_ERROR;
       }
-#line 1780 "y.tab.c"
+#line 1805 "y.tab.c"
     break;
 
   case 67: /* boolean_expr: expr EQ expr  */
-#line 379 "parser.y"
+#line 394 "parser.y"
                    { 
         if (!type_compatible((yyvsp[-2].tval), (yyvsp[0].tval))) semantic_error("expression type mismatch", ""); 
         (yyval.tval) = T_BOOL;
       }
-#line 1789 "y.tab.c"
+#line 1814 "y.tab.c"
     break;
 
   case 68: /* boolean_expr: expr NE expr  */
-#line 383 "parser.y"
+#line 398 "parser.y"
                    { 
         if (!type_compatible((yyvsp[-2].tval), (yyvsp[0].tval))) semantic_error("expression type mismatch", ""); 
         (yyval.tval) = T_BOOL;
       }
-#line 1798 "y.tab.c"
+#line 1823 "y.tab.c"
     break;
 
   case 69: /* boolean_expr: expr '>' expr  */
-#line 387 "parser.y"
+#line 402 "parser.y"
                     { 
         if (!type_compatible((yyvsp[-2].tval), (yyvsp[0].tval))) semantic_error("expression type mismatch", ""); 
         (yyval.tval) = T_BOOL;
       }
-#line 1807 "y.tab.c"
+#line 1832 "y.tab.c"
     break;
 
   case 70: /* boolean_expr: expr '<' expr  */
-#line 391 "parser.y"
+#line 406 "parser.y"
                     { 
         if (!type_compatible((yyvsp[-2].tval), (yyvsp[0].tval))) semantic_error("expression type mismatch", ""); 
         (yyval.tval) = T_BOOL;
       }
-#line 1816 "y.tab.c"
+#line 1841 "y.tab.c"
     break;
 
   case 71: /* boolean_expr: expr LE expr  */
-#line 395 "parser.y"
+#line 410 "parser.y"
                     { 
         if (!type_compatible((yyvsp[-2].tval), (yyvsp[0].tval))) semantic_error("expression type mismatch", ""); 
         (yyval.tval) = T_BOOL;
       }
-#line 1825 "y.tab.c"
-    break;
-
-  case 72: /* boolean_expr: expr GE expr  */
-#line 399 "parser.y"
-                    { 
-        if (!type_compatible((yyvsp[-2].tval), (yyvsp[0].tval))) semantic_error("expression type mismatch", ""); 
-        (yyval.tval) = T_BOOL;
-      }
-#line 1834 "y.tab.c"
-    break;
-
-  case 73: /* boolean_expr: '!' expr  */
-#line 403 "parser.y"
-               {
-        (yyval.tval) = T_BOOL;
-      }
-#line 1842 "y.tab.c"
-    break;
-
-  case 74: /* boolean_expr: expr AND expr  */
-#line 406 "parser.y"
-                    {
-        (yyval.tval) = T_BOOL;
-    }
 #line 1850 "y.tab.c"
     break;
 
+  case 72: /* boolean_expr: expr GE expr  */
+#line 414 "parser.y"
+                    { 
+        if (!type_compatible((yyvsp[-2].tval), (yyvsp[0].tval))) semantic_error("expression type mismatch", ""); 
+        (yyval.tval) = T_BOOL;
+      }
+#line 1859 "y.tab.c"
+    break;
+
+  case 73: /* boolean_expr: '!' expr  */
+#line 418 "parser.y"
+               {
+        (yyval.tval) = T_BOOL;
+      }
+#line 1867 "y.tab.c"
+    break;
+
+  case 74: /* boolean_expr: expr AND expr  */
+#line 421 "parser.y"
+                    {
+        (yyval.tval) = T_BOOL;
+    }
+#line 1875 "y.tab.c"
+    break;
+
   case 75: /* boolean_expr: expr OR expr  */
-#line 409 "parser.y"
+#line 424 "parser.y"
                    {
         (yyval.tval) = T_BOOL;
     }
-#line 1858 "y.tab.c"
+#line 1883 "y.tab.c"
     break;
 
   case 76: /* const_expr: ICONST  */
-#line 415 "parser.y"
+#line 430 "parser.y"
              { (yyval.tval) = T_INT; }
-#line 1864 "y.tab.c"
+#line 1889 "y.tab.c"
     break;
 
   case 77: /* const_expr: FCONST  */
-#line 416 "parser.y"
+#line 431 "parser.y"
              { (yyval.tval) = T_FLOAT; }
-#line 1870 "y.tab.c"
+#line 1895 "y.tab.c"
     break;
 
   case 78: /* const_expr: BCONST  */
-#line 417 "parser.y"
+#line 432 "parser.y"
              { (yyval.tval) = T_BOOL; }
-#line 1876 "y.tab.c"
+#line 1901 "y.tab.c"
     break;
 
   case 79: /* const_expr: SCONST  */
-#line 418 "parser.y"
+#line 433 "parser.y"
              { (yyval.tval) = T_STRING; }
-#line 1882 "y.tab.c"
+#line 1907 "y.tab.c"
     break;
 
   case 80: /* type_spec: TINT  */
-#line 422 "parser.y"
+#line 437 "parser.y"
               { (yyval.tval) = T_INT; }
-#line 1888 "y.tab.c"
+#line 1913 "y.tab.c"
     break;
 
   case 81: /* type_spec: TFLOAT  */
-#line 423 "parser.y"
+#line 438 "parser.y"
               { (yyval.tval) = T_FLOAT; }
-#line 1894 "y.tab.c"
+#line 1919 "y.tab.c"
     break;
 
   case 82: /* type_spec: TBOOL  */
-#line 424 "parser.y"
+#line 439 "parser.y"
               { (yyval.tval) = T_BOOL; }
-#line 1900 "y.tab.c"
+#line 1925 "y.tab.c"
     break;
 
   case 83: /* type_spec: TSTRING  */
-#line 425 "parser.y"
+#line 440 "parser.y"
               { (yyval.tval) = T_STRING; }
-#line 1906 "y.tab.c"
+#line 1931 "y.tab.c"
     break;
 
   case 84: /* type_spec: TVOID  */
-#line 426 "parser.y"
+#line 441 "parser.y"
               { (yyval.tval) = T_VOID; }
-#line 1912 "y.tab.c"
+#line 1937 "y.tab.c"
     break;
 
   case 85: /* identifier: ID  */
-#line 430 "parser.y"
+#line 445 "parser.y"
          { (yyval.sval) = strdup((yyvsp[0].sval)); }
-#line 1918 "y.tab.c"
+#line 1943 "y.tab.c"
+    break;
+
+  case 88: /* arg_list: expr  */
+#line 455 "parser.y"
+           {
+        func_params_type.push_back((yyvsp[0].tval));
+    }
+#line 1951 "y.tab.c"
+    break;
+
+  case 89: /* arg_list: arg_list ',' expr  */
+#line 458 "parser.y"
+                        {
+        func_params_type.push_back((yyvsp[0].tval));
+    }
+#line 1959 "y.tab.c"
     break;
 
 
-#line 1922 "y.tab.c"
+#line 1963 "y.tab.c"
 
       default: break;
     }
@@ -2111,11 +2152,13 @@ yyreturnlab:
   return yyresult;
 }
 
-#line 444 "parser.y"
+#line 463 "parser.y"
            
 
 void yyerror(const string& msg) {
     cerr << "SYNTAX(" << linenum << "): " << msg << '\n';
+    for (auto& ptr : type_pool) delete ptr;
+    exit(-1);
 }
 
 int main(int argc,char* argv[]){
@@ -2134,5 +2177,6 @@ int main(int argc,char* argv[]){
             semantic_error("has no main function", "");
         puts("PASS – no errors");
     }
+    for (auto& ptr : type_pool) delete ptr;
     return 0;
 }
