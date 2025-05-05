@@ -2,3 +2,4 @@
 *.o
 mycompiler
 y.tab.*
+lex.yy.c
