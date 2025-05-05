@@ -1,0 +1,4 @@
+flex b11115036.l
+g++ lex.yy.c -o out -ll
+./out < Sigma.sd
+
