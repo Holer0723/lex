@@ -72,22 +72,22 @@ extern int yydebug;
     READ = 273,                    /* READ  */
     TVOID = 274,                   /* TVOID  */
     EXTERN = 275,                  /* EXTERN  */
-    ICONST = 276,                  /* ICONST  */
-    FCONST = 277,                  /* FCONST  */
-    SCONST = 278,                  /* SCONST  */
-    BCONST = 279,                  /* BCONST  */
-    TDOUBLE = 280,                 /* TDOUBLE  */
-    TCHAR = 281,                   /* TCHAR  */
-    EQ = 282,                      /* EQ  */
-    NE = 283,                      /* NE  */
-    LE = 284,                      /* LE  */
-    GE = 285,                      /* GE  */
-    AND = 286,                     /* AND  */
-    OR = 287,                      /* OR  */
-    ID = 288,                      /* ID  */
-    TFLOAT = 289,                  /* TFLOAT  */
-    TBOOL = 290,                   /* TBOOL  */
-    TINT = 291,                    /* TINT  */
+    FCONST = 276,                  /* FCONST  */
+    SCONST = 277,                  /* SCONST  */
+    BCONST = 278,                  /* BCONST  */
+    TDOUBLE = 279,                 /* TDOUBLE  */
+    TCHAR = 280,                   /* TCHAR  */
+    EQ = 281,                      /* EQ  */
+    NE = 282,                      /* NE  */
+    LE = 283,                      /* LE  */
+    GE = 284,                      /* GE  */
+    AND = 285,                     /* AND  */
+    OR = 286,                      /* OR  */
+    ID = 287,                      /* ID  */
+    TFLOAT = 288,                  /* TFLOAT  */
+    TBOOL = 289,                   /* TBOOL  */
+    TINT = 290,                    /* TINT  */
+    ICONST = 291,                  /* ICONST  */
     TSTRING = 292,                 /* TSTRING  */
     UMINUS = 293,                  /* UMINUS  */
     INC = 294,                     /* INC  */
@@ -118,45 +118,28 @@ extern int yydebug;
 #define READ 273
 #define TVOID 274
 #define EXTERN 275
-#define ICONST 276
-#define FCONST 277
-#define SCONST 278
-#define BCONST 279
-#define TDOUBLE 280
-#define TCHAR 281
-#define EQ 282
-#define NE 283
-#define LE 284
-#define GE 285
-#define AND 286
-#define OR 287
-#define ID 288
-#define TFLOAT 289
-#define TBOOL 290
-#define TINT 291
+#define FCONST 276
+#define SCONST 277
+#define BCONST 278
+#define TDOUBLE 279
+#define TCHAR 280
+#define EQ 281
+#define NE 282
+#define LE 283
+#define GE 284
+#define AND 285
+#define OR 286
+#define ID 287
+#define TFLOAT 288
+#define TBOOL 289
+#define TINT 290
+#define ICONST 291
 #define TSTRING 292
 #define UMINUS 293
 #define INC 294
 #define DEC 295
 
 /* Value type.  */
-#if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
-union YYSTYPE
-{
-#line 88 "parser.y"
-
-    int             ival;
-    float           fval;
-    char*           sval;
-    Type            tval;
-
-#line 154 "y.tab.h"
-
-};
-typedef union YYSTYPE YYSTYPE;
-# define YYSTYPE_IS_TRIVIAL 1
-# define YYSTYPE_IS_DECLARED 1
-#endif
 
 
 extern YYSTYPE yylval;

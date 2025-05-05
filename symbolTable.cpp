@@ -19,8 +19,8 @@ void SymbolTable::popScope() {
 }
 
 
-bool SymbolTable::insert(const string& id, Kind kind, Type type) {
-    Symbol sym{id, kind, type};
+bool SymbolTable::insert(const string& id, Kind kind, ExtendedType type, vector<ExtendedType> params) {
+    Symbol sym = Symbol{id, kind, type, params};
     return scopes.back().emplace(id, sym).second;
 }
 
@@ -36,7 +36,7 @@ void SymbolTable::dump() {
 
     auto printTable = [&](const unordered_map<string, Symbol>& table) -> void {
         for (auto it : table) {
-            cout << it.second.name << ' ' << kind2Str(it.second.kind) << ' ' << type2Str(it.second.type);
+            cout << it.second.name << ' ' << kind2Str(it.second.kind) << ' ' << type2Str(it.second.type.t);
         }
     };
 

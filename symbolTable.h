@@ -22,26 +22,18 @@ enum class Kind {
     K_VAR,
 };
 
-// struct ArrayDesc {
-//     vector<int> dims;
-//     bool operator==(const ArrayDesc& o) const { return dims == o.dims; }
-// };
-
-// struct ExtendedType {
-//     Type      type;
-//     ArrayDesc arr;
-// };
-
-// struct FuncSig {
-//     Type                 ret;
-//     vector<ExtendedType> params;
-// };
+struct ExtendedType {
+    Type        t;
+    vector<int> dims;
+    bool operator==(const ExtendedType& o) const { return t == o.t && dims == o.dims; }
+    bool operator!=(const ExtendedType& o) const { return !(*this == o); }
+};
 
 struct Symbol {
-    string   name;
-    Kind     kind;
-    Type     type;
-    // FuncSig* func;
+    string               name;
+    Kind                 kind;
+    ExtendedType         type;
+    vector<ExtendedType> params;
 };
 
 class SymbolTable {
@@ -59,7 +51,7 @@ public:
 
     void popScope();
 
-    bool insert(const string& id, Kind kind, Type type);
+    bool insert(const string& id, Kind kind, ExtendedType type, vector<ExtendedType> params);
 
     const Symbol* lookup(const string& id) const;
 
