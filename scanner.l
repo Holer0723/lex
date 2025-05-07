@@ -44,9 +44,9 @@ char* make_string(const char* str, int length) {
 
 print           print
 
-id              [a-zA-Z][a-zA-Z0-9]*
+id              [a-zA-Z_][_a-zA-Z0-9]*
 integer         [+-]?[0-9]+
-string          \"([^"]|\"\")*\"
+string          \"([^"])*\"
 relational      (<|<=|>=|>|==|!=)
 mulcomment      "/*"([^*]|\*+[^*/])*\*+"/\n"
 real            [+-]?([0-9]+\.[0-9]*|\.[0-9]+)([Ee][+-]?[0-9]+)?

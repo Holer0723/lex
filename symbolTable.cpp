@@ -2,7 +2,7 @@
 
 
 SymbolTable::SymbolTable() {
-    scopes.emplace_back();
+    this->pushScope();
 }
 
 void SymbolTable::pushScope() {
@@ -14,7 +14,7 @@ void SymbolTable::popScope() {
         cerr << "attempt to pop global scope\n";
         return;
     }
-    archive.push_back(move(scopes.back()));
+    dump();
     scopes.pop_back();
 }
 
@@ -35,19 +35,14 @@ Symbol* SymbolTable::lookup(const string& id) {
 void SymbolTable::dump() {
 
     auto printTable = [&](const unordered_map<string, Symbol>& table) -> void {
+        cout << "───────── SymbolTable ─────────\n"; 
         for (auto it : table) {
-            cout << it.second.name << ' ' << kind2Str(it.second.kind) << ' ' << type2Str(it.second.type.t);
+            cout << it.second.name << ' ' << kind2Str(it.second.kind) << ' ' << type2Str(it.second.type.t) << '\n';
         }
+        cout << "───────── SymbolTable ─────────\n"; 
     };
-
-    for (auto it = archive.begin(); it != archive.end(); ++it) {
-        printTable(*it);
-    }
-
-    for (auto it = scopes.begin(); it != scopes.end(); ++it) {
-        printTable(*it);
-    }
-        
+    printTable(scopes.back());
+    
 }
 
 const string SymbolTable::kind2Str(Kind k) {

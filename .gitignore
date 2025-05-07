@@ -3,3 +3,4 @@
 mycompiler
 y.tab.*
 lex.yy.c
+parser.tab.*

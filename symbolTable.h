@@ -39,7 +39,6 @@ struct Symbol {
 class SymbolTable {
 private:
     vector<unordered_map<string, Symbol>> scopes;
-    vector<unordered_map<string, Symbol>> archive;
 
 public:
     static const string kind2Str(Kind k);
@@ -48,12 +47,9 @@ public:
     SymbolTable();
 
     void pushScope();
-
     void popScope();
+    void dump();
 
     bool insert(const string& id, Kind kind, ExtendedType type, vector<ExtendedType> params);
-
     Symbol* lookup(const string& id);
-
-    void dump();
 };

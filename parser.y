@@ -45,18 +45,18 @@ static void semantic_error(const string& msg, const string& id) {
 }
 
 static bool type_compatible(const ExtendedType* dst, const ExtendedType* src) {
-    if (*dst == *src)                                      return true;
-    if (dst == T_STRING || src == T_STRING)                return false;
-    if (dst == T_FLOAT  && src == T_INT)                   return true;
-    if (dst == T_INT    && src == T_FLOAT)                 return true;
-    if ((dst == T_INT || dst == T_FLOAT) && src == T_BOOL) return true;
+    if (*dst == *src)                                            return true;
+    if (*dst == *T_STRING || *src == *T_STRING)                  return false;
+    if (*dst == *T_FLOAT  && *src == *T_INT)                     return true;
+    if (*dst == *T_INT    && *src == *T_FLOAT)                   return true;
+    if ((*dst == *T_INT || *dst == *T_FLOAT) && *src == *T_BOOL) return true;
     return false;
 }
 
 static ExtendedType* promote(const ExtendedType* a, const ExtendedType* b) {
-    if (a == T_ERROR || b == T_ERROR)   return T_ERROR;
-    if (a == T_STRING || b == T_STRING) return T_ERROR;
-    if (a == T_FLOAT  || b == T_FLOAT)  return T_FLOAT;
+    if (*a == *T_ERROR || *b == *T_ERROR)   return T_ERROR;
+    if (*a == *T_STRING || *b == *T_STRING) return T_ERROR;
+    if (*a == *T_FLOAT  || *b == *T_FLOAT)  return T_FLOAT;
     return T_INT;
 }
 
@@ -72,6 +72,7 @@ static bool has_main_func = false;
     int            ival;
     float          fval;
     char*          sval;
+    Kind           kval;
     ExtendedType*  tval;
 }
 
@@ -90,27 +91,21 @@ static bool has_main_func = false;
 %token <sval> TSTRING
 
 
-/* ───────── 優先權 ───────── */
+/* ───────── precedence ───────── */
 %left   OR
 %left   AND
 %right  '!'
 %nonassoc EQ NE '<' '>' LE GE
 %left   '+' '-'
 %left   '*' '/' '%'
-%nonassoc UMINUS
-%right  INC DEC
+%nonassoc UMINUS INC DEC
 
 
-/* 指定各符號使用 union 何欄位 */
-%type <tval>  type_spec
-%type <tval>  const_expr
-%type <tval>  boolean_expr
-%type <tval>  expr
-%type <tval>  array_block
+%type <tval>  data_type const_expr boolean_expr expr array_block expr_array_block integer_expr variable_expr constant_and_integer_expr
 %type <sval>  identifier
 
 
-/* ───────── 開始符號 ───────── */
+/* ───────── start symbol ───────── */
 %start program
 
 %%                      
@@ -119,7 +114,6 @@ program
     : decl_list               { TRACE("program OK\n"); }
     ;
 
-/* ── 2. “零到多個宣告 or 函式” ── */
 decl_list
     : /* empty */
     | decl_list declaration
@@ -128,23 +122,27 @@ decl_list
 declaration
     : const_decl
     | var_decl
-    | func_def
+    | func_decl
     ;
 
-/* ───────── 常量宣告 ───────── */
+/* ───────── constant expression ───────── */
 const_decl
-    : CONST type_spec identifier '=' const_expr ';' {
+    : CONST data_type identifier '=' constant_and_integer_expr ';' {
         if (!symtab.insert($3, Kind::K_CONST, *$2, {}))
             semantic_error("redeclared const", $3);
         if ($2 != $5)
             semantic_error("const type mismatch", $3);
-      }
+        if ($2 == T_VOID) 
+            semantic_error("cannot declare a void type constant", $3);
+    }
     ;
 
 
-/* ───────── 變量宣告 ───────── */
+/* ───────── variable declaration ───────── */
 var_decl
-    : type_spec ident_init_list ';' { 
+    : data_type init_id_list ';' { 
+        if ($1 == T_VOID)
+            semantic_error("cannot decalre a void type variable", "");
         for (auto& var : decl_vars) {
             string name = var.id;
             ExtendedType* type = var.type;
@@ -157,16 +155,16 @@ var_decl
     }
     ;
 
-ident_init_list
-    : ident_init
-    | ident_init ',' ident_init_list 
+init_id_list
+    : init_id
+    | init_id ',' init_id_list 
     ;
 
-ident_init
+init_id
     : identifier array_block 
       { decl_vars.push_back({$1, $2}); }
-    | identifier '=' const_expr 
-      { decl_vars.push_back({$1, $3}); }
+    | identifier '=' constant_and_integer_expr 
+      { decl_vars.push_back({$1, $3}); TRACE("init_id_list -> init_id\n"); }
     ;
 
 array_block
@@ -182,9 +180,9 @@ array_block
     }
     ;
 
-/* ───────── 函式定義 ───────── */
-func_def
-    : type_spec identifier {
+/* ───────── function declaration ───────── */
+func_decl
+    : data_type identifier {
         if (!symtab.insert($2, Kind::K_FUNC, *$1, {})) 
             semantic_error("redeclared func", $2);
         if (string($2) == "main") 
@@ -193,17 +191,21 @@ func_def
             semantic_error("invalid main function type:", SymbolTable::type2Str($1->t));
         current_func_type = $1;
         symtab.pushScope();
-    } '(' param_list_opt ')' block {
+    } '(' opt_param_list ')' block {
         symtab.popScope();
         Symbol *sym = symtab.lookup($2);
-        for (auto* p : func_params_type)
-        sym->params.push_back(*p);
+        for (auto* p : func_params_type) {
+            sym->params.push_back(*p);
+        }
         func_params_type.clear();
         current_func_type = T_ERROR;
     }
     ;
 
-param_list_opt : /* empty */ | param_list ;
+opt_param_list 
+    : /* empty */ 
+    | param_list 
+    ;
 
 param_list
     : param
@@ -211,9 +213,11 @@ param_list
     ;
 
 param
-    : type_spec identifier array_block { 
+    : data_type identifier array_block { 
         if (!symtab.insert($2, Kind::K_VAR, ExtendedType{$1->t, $3->dims}, {}))
             semantic_error("redeclared param", $2);
+        if ($1 == T_VOID) 
+            semantic_error("function parameter cannot be of void type", $2);
         func_params_type.push_back(new ExtendedType{ $1->t, $3->dims });
         type_pool.push_back(func_params_type.back());
     }
@@ -230,11 +234,16 @@ block_item_list
     ;
 
 block_item
-    : declaration
+    : block_decl 
     | statement
     ;
 
-/* ------------ Statement ------------ */
+block_decl
+    : const_decl
+    | var_decl
+    ;
+
+/* ───────── Statement ───────── */
 statement
     : simple_stmt ';'
     | if_stmt
@@ -252,24 +261,63 @@ simple_or_block_stmt
 
 simple_stmt
     : identifier '=' expr {
+        TRACE("simple_stmt -> identifier '=' expr");
         Symbol* sym = symtab.lookup($1);
-        if (!sym) semantic_error("undeclared id",$1);
-        else if (!type_compatible(&sym->type, $3)) 
+        if (!sym) 
+            semantic_error("undeclared id",$1);
+        if (sym->kind == Kind::K_FUNC)
+            semantic_error("try to assign to a function: ", $1);
+        if ($3 == T_VOID)
+            semantic_error("cannot assign result of void function", "");
+        if (sym->kind == Kind::K_CONST)
+            semantic_error("try to assign to a constant: ", $1);
+        if (!type_compatible(&sym->type, $3)) {
             semantic_error("type mismatch in assignment", $1);
+        }
     }
-    | identifier INC 
-    | identifier DEC 
-    | PRINT   expr 
-    | PRINTLN expr 
-    | READ    identifier 
+    | identifier INC {
+        Symbol* sym = symtab.lookup($1);
+        if (!sym) 
+            semantic_error("undeclared id",$1);
+        if (sym->kind == Kind::K_FUNC)
+            semantic_error("try to increase a function:", $1);
+        if (sym->kind == Kind::K_CONST)
+            semantic_error("try to increase a constant:", $1);
+        if (sym->type != *T_INT && sym->type != *T_FLOAT) 
+            semantic_error("invalid operation on", $1);
+    }
+    | identifier DEC {
+        Symbol* sym = symtab.lookup($1);
+        if (!sym) 
+            semantic_error("undeclared id",$1);
+        if (sym->kind == Kind::K_FUNC)
+            semantic_error("try to decrease a function: ", $1);
+        if (sym->kind == Kind::K_CONST)
+            semantic_error("try to decrease a constant: ", $1);
+        if (sym->type != *T_INT && sym->type != *T_FLOAT)
+            semantic_error("invalid operation on", $1);                                                                                                                                                                                      
+    }
+    | PRINT   expr {
+        // void
+    }
+    | PRINTLN expr {
+        // void
+    }
+    | READ    identifier {
+        Symbol* sym = symtab.lookup($2);
+        if (!sym) 
+            semantic_error("undeclared id", $2);
+        if (sym->kind == Kind::K_FUNC)
+            semantic_error("try to assign value to a function: ", $2);
+        if (sym->kind == Kind::K_CONST)
+            semantic_error("try to assign value to a constant: ", $2);
+    }
     | /* empty */
     ;
 
 if_stmt
     : IF '(' boolean_expr ')' simple_or_block_stmt
-      { if ($3 != T_BOOL) semantic_error("if cond not bool",""); }
     | IF '(' boolean_expr ')' simple_or_block_stmt ELSE simple_or_block_stmt
-      { if ($3 != T_BOOL) semantic_error("if cond not bool",""); }
     ;
 
 while_stmt
@@ -278,8 +326,11 @@ while_stmt
     ;
 
 for_stmt 
-    : FOR '(' simple_stmt ';'  boolean_expr ';' simple_stmt ')' simple_or_block_stmt
-      { if ($5 != T_BOOL) semantic_error("if cond not bool",""); } 
+    : FOR '(' {
+        symtab.pushScope();
+    } simple_stmt ';'  boolean_expr ';' simple_stmt ')' simple_or_block_stmt { 
+        symtab.popScope();
+    } 
     ;
 
 foreach_stmt
@@ -324,52 +375,66 @@ return_stmt
     : RETURN expr ';' {
         if (current_func_type == T_VOID)
             semantic_error("void function should not return value", "");
-        else if (!type_compatible(current_func_type, $2))
+        else if (!type_compatible(current_func_type, $2)) 
             semantic_error("return type mismatch", "");
       }
     ;
 
 /* ───────── Expression ───────── */
 expr
-    : expr '+' expr { 
-        ExtendedType* t = promote($1, $3);
-        if (t == T_ERROR) 
-            semantic_error("invalid operation", "");
-        $$ = t;
+    : variable_expr
+    | const_expr
+    | boolean_expr
+    | integer_expr
+    ;
+
+variable_expr
+    : variable_expr '+' variable_expr { 
+        if (*$1 == *T_STRING || *$3 == *T_STRING) {
+            if (*$1 != *$3) 
+                semantic_error("invalid operation", "");
+            else
+                $$ = T_STRING; 
+        } else {
+            ExtendedType* t = promote($1, $3);
+            if (t == T_ERROR) 
+                semantic_error("invalid operation", "");
+            $$ = t;
+        }
     }
-    | expr '-' expr { 
-        ExtendedType* t = promote($1, $3);
-        if (t == T_ERROR) 
-            semantic_error("invalid operation", "");
-        $$ = t; 
-    }
-    | expr '*' expr {
-        ExtendedType* t = promote($1, $3);
-        if (t == T_ERROR) 
-            semantic_error("invalid operation", "");
-        $$ = t; 
-    }
-    | expr '/' expr {
-          ExtendedType* t = promote($1, $3);
-          if (t == T_ERROR) 
-              semantic_error("invalid operation", "");
-          $$ = t; 
-    }
-    | expr '%' expr {
+    | variable_expr '-' variable_expr { 
         ExtendedType* t = promote($1, $3);
         if (t == T_ERROR) 
             semantic_error("invalid operation", "");
         $$ = t; 
     }
-    | '-' expr %prec UMINUS  { $$ = $2; }
-    | '(' expr ')'           { $$ = $2; }
-    | ICONST                 { $$ = T_INT;   }
-    | FCONST                 { $$ = T_FLOAT; }
-    | SCONST                 { $$ = T_STRING;}
-    | BCONST                 { $$ = T_BOOL;  }
+    | variable_expr '*' variable_expr {
+        ExtendedType* t = promote($1, $3);
+        if (t == T_ERROR) 
+            semantic_error("invalid operation", "");
+        $$ = t; 
+    }
+    | variable_expr '/' variable_expr {
+        ExtendedType* t = promote($1, $3);
+        if (t == T_ERROR) 
+            semantic_error("invalid operation", "");
+        $$ = t; 
+    }
+    | variable_expr '%' variable_expr {
+        if (*$1 != *T_INT || *$3 != *T_INT)
+            semantic_error("modulo operator requires integer operands", "");
+        $$ = T_INT; 
+    }
+    | '-' variable_expr %prec UMINUS  { $$ = $2; }
+    | '(' variable_expr ')'           { $$ = $2; }
     | identifier {
+        cout << $1 << ' ' << "fjdhfjkdhfjkdhfjkdhvjkhvjk\n";
         Symbol* sym = symtab.lookup($1);
         if (!sym) semantic_error("undeclared var",$1);
+        if (sym->type.dims.size() != $2->dims.size()) {
+            // cout << sym->type.dims.size() << ' ' << $2->dims.size() << '\n';
+            semantic_error("array dimension mismatch", $1);
+        }
         $$ = sym ? &sym->type : (ExtendedType*)T_ERROR;
     }
     | identifier '(' arg_list_opt ')' {
@@ -384,53 +449,144 @@ expr
         func_params_type.clear();
         $$ = sym ? &sym->type : (ExtendedType*)T_ERROR;
     }
-    | boolean_expr
     ;
 
+constant_and_integer_expr
+    : integer_expr { $$ = $1; }
+    | const_expr   { $$ = $1; }
+    ;
+
+integer_expr 
+    : integer_expr '+' integer_expr  { $$ = T_INT; }
+    | integer_expr '-' integer_expr  { $$ = T_INT; }
+    | integer_expr '*' integer_expr  { $$ = T_INT; }
+    | integer_expr '/' integer_expr  { $$ = T_INT; }
+    | integer_expr '%' integer_expr  { $$ = T_INT; }
+    | '-' integer_expr %prec UMINUS  { $$ = T_INT; }
+    | '(' integer_expr ')'           { $$ = T_INT; }
+    | ICONST { $$ = T_INT; }
+    ;
+
+
 boolean_expr
-    : expr EQ expr { 
-        if (!type_compatible($1, $3)) semantic_error("expression type mismatch", ""); 
+    : expr EQ expr {
+        bool same   = (*$1 == *$3);                                     
+        bool numMix = ((*$1 == *T_INT || *$1 == *T_FLOAT || *$1 == *T_BOOL) 
+                    && (*$3 == *T_INT || *$3 == *T_FLOAT || *$3 == *T_BOOL));
+        if (!(same || numMix))
+            semantic_error("comparison type mismatch", "");
         $$ = T_BOOL;
     }
-    | expr NE expr { 
-        if (!type_compatible($1, $3)) semantic_error("expression type mismatch", ""); 
+    | expr NE expr {
+        bool same   = (*$1 == *$3);                                     
+        bool numMix = ((*$1 == *T_INT || *$1 == *T_FLOAT || *$1 == *T_BOOL) 
+                    && (*$3 == *T_INT || *$3 == *T_FLOAT || *$3 == *T_BOOL));
+        if (!(same || numMix))
+           semantic_error("comparison type mismatch", "");
         $$ = T_BOOL;
     }
-    | expr '>' expr { 
-        if (!type_compatible($1, $3)) semantic_error("expression type mismatch", ""); 
+    | expr '>' expr {
+        bool ok = (*$1 == *$3 && *$1 != *T_STRING) ||                 
+                 ((*$1 == *T_INT  || *$1 == *T_FLOAT || *$1 == *T_BOOL) &&
+                  (*$3 == *T_INT  || *$3 == *T_FLOAT || *$3 == *T_BOOL));
+        if (!ok)
+            semantic_error("comparison type mismatch", "");
         $$ = T_BOOL;
     }
     | expr '<' expr { 
-        if (!type_compatible($1, $3)) semantic_error("expression type mismatch", ""); 
+        bool ok = (*$1 == *$3 && *$1 != *T_STRING) ||                 
+                 ((*$1 == *T_INT  || *$1 == *T_FLOAT || *$1 == *T_BOOL) &&
+                  (*$3 == *T_INT  || *$3 == *T_FLOAT || *$3 == *T_BOOL));
+        if (!ok)
+            semantic_error("comparison type mismatch", "");
+    }
+    | expr LE expr {
+        bool ok = (*$1 == *$3 && *$1 != *T_STRING) ||                 
+                 ((*$1 == *T_INT  || *$1 == *T_FLOAT || *$1 == *T_BOOL) &&
+                  (*$3 == *T_INT  || *$3 == *T_FLOAT || *$3 == *T_BOOL));
+        if (!ok)
+            semantic_error("comparison type mismatch", "");
         $$ = T_BOOL;
     }
-    | expr LE expr  { 
-        if (!type_compatible($1, $3)) semantic_error("expression type mismatch", ""); 
-        $$ = T_BOOL;
-    }
-    | expr GE expr  { 
-        if (!type_compatible($1, $3)) semantic_error("expression type mismatch", ""); 
+    | expr GE expr {
+        bool ok = (*$1 == *$3 && *$1 != *T_STRING) ||                 
+                 ((*$1 == *T_INT  || *$1 == *T_FLOAT || *$1 == *T_BOOL) &&
+                  (*$3 == *T_INT  || *$3 == *T_FLOAT || *$3 == *T_BOOL));
+        if (!ok)
+            semantic_error("comparison type mismatch", "");
         $$ = T_BOOL;
     }
     | '!' expr {
+        if (*$2 != *T_BOOL)
+            semantic_error("logical operand not bool", "");
         $$ = T_BOOL;
     }
     | expr AND expr {
+        if (*$1 != *T_BOOL || *$3 != *T_BOOL)
+            semantic_error("logical operand not bool", "");
         $$ = T_BOOL;
     }
     | expr OR expr {
+        if (*$1 != *T_BOOL || *$3 != *T_BOOL)
+            semantic_error("logical operand not bool", "");
         $$ = T_BOOL;
     }
     ;
 
+
 const_expr  
-    : ICONST { $$ = T_INT; }
+    : const_expr '+' const_expr { 
+        if (*$1 == *T_STRING || *$3 == *T_STRING) {
+            if (*$1 != *$3) 
+                semantic_error("invalid operation", "");
+            else
+                $$ = T_STRING; 
+        } else {
+            ExtendedType* t = promote($1, $3);
+            if (t == T_ERROR) 
+                semantic_error("invalid operation", "");
+            $$ = t;
+        }
+    }
+    | const_expr '-' const_expr { 
+        ExtendedType* t = promote($1, $3);
+        if (t == T_ERROR) 
+            semantic_error("invalid operation", "");
+        $$ = t; 
+    }
+    | const_expr '*' const_expr {
+        ExtendedType* t = promote($1, $3);
+        if (t == T_ERROR) 
+            semantic_error("invalid operation", "");
+        $$ = t; 
+    }
+    | const_expr '/' const_expr {
+        ExtendedType* t = promote($1, $3);
+        if (t == T_ERROR) 
+            semantic_error("invalid operation", "");
+        $$ = t; 
+    }
+    | '-' const_expr %prec UMINUS  { $$ = $2; }
+    | '(' const_expr ')'           { $$ = $2; }
     | FCONST { $$ = T_FLOAT; }
     | BCONST { $$ = T_BOOL; }
     | SCONST { $$ = T_STRING; }
     ;
 
-type_spec
+expr_array_block
+    : /* empty */ { $$ = T_ERROR; cout << "emptygkfjgkfjglkfjglkfjglkfjlkgfjklg\n"; }
+    | '[' integer_expr ']' expr_array_block {
+        vector<int> dims(1);
+        for (auto& _ : $4->dims)
+            dims.push_back(1);
+        cout << "times: ffffffffffffffffffffffffffffffffff\n";
+        ExtendedType* nt = new ExtendedType{Type::ERROR, dims};
+        type_pool.push_back(nt);
+        $$ = nt;
+    }
+    ;
+
+data_type
     : TINT    { $$ = T_INT; }
     | TFLOAT  { $$ = T_FLOAT; }
     | TBOOL   { $$ = T_BOOL; }
@@ -460,7 +616,7 @@ arg_list
 void yyerror(const string& msg) {
     cerr << "SYNTAX(" << linenum << "): " << msg << '\n';
     for (auto& ptr : type_pool) delete ptr;
-    exit(-1);
+    // exit(-1);
 }
 
 int main(int argc,char* argv[]){
