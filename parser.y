@@ -100,7 +100,7 @@ static bool has_main_func = false;
 %nonassoc UMINUS INC DEC
 
 
-%type <tval>  data_type const_expr boolean_expr expr integer_expr variable_expr constant_and_integer_expr
+%type <tval>  data_type const_expr boolean_expr expr variable_expr
 %type <tval>  array  array_block expr_array_block
 %type <sval>  identifier
 
@@ -127,7 +127,7 @@ declaration
 
 /* ───────── constant expression ───────── */
 const_decl
-    : CONST data_type identifier '=' constant_and_integer_expr ';' {
+    : CONST data_type identifier '=' const_expr ';' {
         if (!symtab.insert($3, Kind::K_CONST, *$2, {}))
             semantic_error("redeclared const", $3);
         if ($2 != $5)
@@ -163,7 +163,7 @@ init_id_list
 init_id
     : identifier array_block 
       { decl_vars.push_back({$1, $2}); }
-    | identifier '=' constant_and_integer_expr 
+    | identifier '=' const_expr 
       { decl_vars.push_back({$1, $3}); }
     ;
 
@@ -385,10 +385,81 @@ return_stmt
 
 /* ───────── Expression ───────── */
 expr
-    : variable_expr
+    : variable_expr '+' const_expr {
+        if (*$1 == *T_STRING || *$3 == *T_STRING) {
+            if (*$1 != *$3) 
+                semantic_error("invalid operation", "");
+            else
+                $$ = T_STRING; 
+        } else {
+            ExtendedType* t = promote($1, $3);
+            if (t == T_ERROR) 
+                semantic_error("invalid operation", "");
+            $$ = t;
+        }
+    }
+    | const_expr '+' variable_expr {
+        if (*$1 == *T_STRING || *$3 == *T_STRING) {
+            if (*$1 != *$3) 
+                semantic_error("invalid operation", "");
+            else
+                $$ = T_STRING; 
+        } else {
+            ExtendedType* t = promote($1, $3);
+            if (t == T_ERROR) 
+                semantic_error("invalid operation", "");
+            $$ = t;
+        }
+    }
+    | variable_expr '-' const_expr {
+        ExtendedType* t = promote($1, $3);
+        if (t == T_ERROR) 
+            semantic_error("invalid operation", "");
+        $$ = t; 
+    }
+    | const_expr '-' variable_expr {
+        ExtendedType* t = promote($1, $3);
+        if (t == T_ERROR) 
+            semantic_error("invalid operation", "");
+        $$ = t; 
+    }
+    | variable_expr '*' const_expr {
+        ExtendedType* t = promote($1, $3);
+        if (t == T_ERROR) 
+            semantic_error("invalid operation", "");
+        $$ = t; 
+    }
+    | const_expr '*' variable_expr {
+        ExtendedType* t = promote($1, $3);
+        if (t == T_ERROR) 
+            semantic_error("invalid operation", "");
+        $$ = t; 
+    }
+    | variable_expr '/' const_expr {
+        ExtendedType* t = promote($1, $3);
+        if (t == T_ERROR) 
+            semantic_error("invalid operation", "");
+        $$ = t; 
+    }
+    | const_expr '/' variable_expr {
+        ExtendedType* t = promote($1, $3);
+        if (t == T_ERROR) 
+            semantic_error("invalid operation", "");
+        $$ = t; 
+    }
+    | variable_expr '%' const_expr {
+        if (*$1 != *T_INT || *$3 != *T_INT)
+            semantic_error("modulo operator requires integer operands", "");
+        $$ = T_INT; 
+    }
+    | const_expr '%' variable_expr {
+        if (*$1 != *T_INT || *$3 != *T_INT)
+            semantic_error("modulo operator requires integer operands", "");
+        $$ = T_INT; 
+    }
+    | variable_expr
     | const_expr
     | boolean_expr
-    | integer_expr
     ;
 
 variable_expr
@@ -453,23 +524,6 @@ variable_expr
         $$ = sym ? &sym->type : (ExtendedType*)T_ERROR;
     }
     ;
-
-constant_and_integer_expr
-    : integer_expr { $$ = $1; }
-    | const_expr   { $$ = $1; }
-    ;
-
-integer_expr 
-    : integer_expr '+' integer_expr  { $$ = T_INT; }
-    | integer_expr '-' integer_expr  { $$ = T_INT; }
-    | integer_expr '*' integer_expr  { $$ = T_INT; }
-    | integer_expr '/' integer_expr  { $$ = T_INT; }
-    | integer_expr '%' integer_expr  { $$ = T_INT; }
-    | '-' integer_expr %prec UMINUS  { $$ = T_INT; }
-    | '(' integer_expr ')'           { $$ = T_INT; }
-    | ICONST { $$ = T_INT; }
-    ;
-
 
 boolean_expr
     : expr EQ expr {
@@ -575,6 +629,7 @@ const_expr
     | FCONST { $$ = T_FLOAT; }
     | BCONST { $$ = T_BOOL; }
     | SCONST { $$ = T_STRING; }
+    | ICONST { $$ = T_INT; }
     ;
 
 array
@@ -589,13 +644,17 @@ array
     ;
 
 expr_array_block
-    : '[' integer_expr ']' { 
+    : '[' const_expr ']' { 
+        if ($2 != T_INT)
+            semantic_error("array dimension not integer", "");
         vector<int> dims(1);
         ExtendedType* nt = new ExtendedType{Type::ERROR, dims};
         type_pool.push_back(nt);
         $$ = nt;
     }
-    | '[' integer_expr ']' expr_array_block {
+    | '[' const_expr ']' expr_array_block {
+        if ($2 != T_INT)
+            semantic_error("array dimension not integer", "");
         vector<int> dims(1);
         for (auto& _ : $4->dims)
             dims.push_back(1);
