@@ -34,8 +34,7 @@ extern int linenum;
 void yyerror(const string& msg);
 int yylex(void);
 
-vector<Pending_var> decl_vars;
-vector<ExtendedType*> func_params_type;
+vector<Pending_var> decl_vars, delay_symbols;
 vector<ExtendedType*> type_pool;
 
 static void semantic_error(const string& msg, const string& id) {
@@ -45,11 +44,11 @@ static void semantic_error(const string& msg, const string& id) {
 }
 
 static bool type_compatible(const ExtendedType* dst, const ExtendedType* src) {
-    if (*dst == *src)                                            return true;
-    if (*dst == *T_STRING || *src == *T_STRING)                  return false;
-    if (*dst == *T_FLOAT  && *src == *T_INT)                     return true;
-    if (*dst == *T_INT    && *src == *T_FLOAT)                   return true;
-    if ((*dst == *T_INT || *dst == *T_FLOAT) && *src == *T_BOOL) return true;
+    if (dst->t == src->t)                                            return true;
+    if (dst->t == T_STRING->t || src->t == T_STRING->t)                  return false;
+    if (dst->t == T_FLOAT->t  && src->t == T_INT->t)                     return true;
+    if (dst->t == T_INT->t    && src->t == T_FLOAT->t)                   return true;
+    if ((dst->t == T_INT->t || dst->t == T_FLOAT->t) && src->t == T_BOOL->t) return true;
     return false;
 }
 
@@ -101,7 +100,8 @@ static bool has_main_func = false;
 %nonassoc UMINUS INC DEC
 
 
-%type <tval>  data_type const_expr boolean_expr expr array_block expr_array_block integer_expr variable_expr constant_and_integer_expr
+%type <tval>  data_type const_expr boolean_expr expr integer_expr variable_expr constant_and_integer_expr
+%type <tval>  array  array_block expr_array_block
 %type <sval>  identifier
 
 
@@ -164,7 +164,7 @@ init_id
     : identifier array_block 
       { decl_vars.push_back({$1, $2}); }
     | identifier '=' constant_and_integer_expr 
-      { decl_vars.push_back({$1, $3}); TRACE("init_id_list -> init_id\n"); }
+      { decl_vars.push_back({$1, $3}); }
     ;
 
 array_block
@@ -185,19 +185,20 @@ func_decl
     : data_type identifier {
         if (!symtab.insert($2, Kind::K_FUNC, *$1, {})) 
             semantic_error("redeclared func", $2);
-        if (string($2) == "main") 
-            has_main_func = true;
         if (invalid_main_function($1->t, $2)) 
             semantic_error("invalid main function type:", SymbolTable::type2Str($1->t));
         current_func_type = $1;
-        symtab.pushScope();
-    } '(' opt_param_list ')' block {
-        symtab.popScope();
-        Symbol *sym = symtab.lookup($2);
-        for (auto* p : func_params_type) {
-            sym->params.push_back(*p);
+    } '(' opt_param_list ')' {
+        if (string($2) == "main") {
+            if (!delay_symbols.empty())
+                semantic_error("main function has param", "");
+            has_main_func = true;
         }
-        func_params_type.clear();
+        Symbol *sym = symtab.lookup($2);
+        for (auto& p : delay_symbols) {
+            sym->params.push_back(*p.type);
+        }
+    } block {
         current_func_type = T_ERROR;
     }
     ;
@@ -214,18 +215,23 @@ param_list
 
 param
     : data_type identifier array_block { 
-        if (!symtab.insert($2, Kind::K_VAR, ExtendedType{$1->t, $3->dims}, {}))
-            semantic_error("redeclared param", $2);
         if ($1 == T_VOID) 
             semantic_error("function parameter cannot be of void type", $2);
-        func_params_type.push_back(new ExtendedType{ $1->t, $3->dims });
-        type_pool.push_back(func_params_type.back());
+        ExtendedType* nt = new ExtendedType{$1->t, $3->dims};
+        delay_symbols.push_back({$2, nt});
+        type_pool.push_back(nt);
     }
     ;
 
 /* ───────── Block & Statement ───────── */
 block
-    : '{' block_item_list '}' 
+    : '{' { 
+        symtab.pushScope(); 
+        for (auto& symbol : delay_symbols)
+            if (!symtab.insert(symbol.id, Kind::K_VAR, *symbol.type, {}))
+                semantic_error("redeclared param", symbol.id);
+        delay_symbols.clear();
+    } block_item_list '}' { symtab.popScope(); } 
     ;
 
 block_item_list
@@ -261,7 +267,6 @@ simple_or_block_stmt
 
 simple_stmt
     : identifier '=' expr {
-        TRACE("simple_stmt -> identifier '=' expr");
         Symbol* sym = symtab.lookup($1);
         if (!sym) 
             semantic_error("undeclared id",$1);
@@ -271,9 +276,10 @@ simple_stmt
             semantic_error("cannot assign result of void function", "");
         if (sym->kind == Kind::K_CONST)
             semantic_error("try to assign to a constant: ", $1);
-        if (!type_compatible(&sym->type, $3)) {
+        if (!type_compatible(&sym->type, $3)) 
             semantic_error("type mismatch in assignment", $1);
-        }
+        if (!sym->type.dims.empty())
+            semantic_error("try to assign value to an array", $1);
     }
     | identifier INC {
         Symbol* sym = symtab.lookup($1);
@@ -326,11 +332,8 @@ while_stmt
     ;
 
 for_stmt 
-    : FOR '(' {
-        symtab.pushScope();
-    } simple_stmt ';'  boolean_expr ';' simple_stmt ')' simple_or_block_stmt { 
-        symtab.popScope();
-    } 
+    : FOR '(' simple_stmt ';'  boolean_expr ';' simple_stmt ')' simple_or_block_stmt 
+       { if ($5 != T_BOOL) semantic_error("if cond not bool",""); }
     ;
 
 foreach_stmt
@@ -428,25 +431,25 @@ variable_expr
     | '-' variable_expr %prec UMINUS  { $$ = $2; }
     | '(' variable_expr ')'           { $$ = $2; }
     | identifier {
-        cout << $1 << ' ' << "fjdhfjkdhfjkdhfjkdhvjkhvjk\n";
         Symbol* sym = symtab.lookup($1);
         if (!sym) semantic_error("undeclared var",$1);
-        if (sym->type.dims.size() != $2->dims.size()) {
-            // cout << sym->type.dims.size() << ' ' << $2->dims.size() << '\n';
-            semantic_error("array dimension mismatch", $1);
-        }
+        if (sym->kind == Kind::K_FUNC)
+            semantic_error("invalid operation", "");
         $$ = sym ? &sym->type : (ExtendedType*)T_ERROR;
+    } 
+    | array {
+        $$ = $1;
     }
     | identifier '(' arg_list_opt ')' {
         Symbol* sym = symtab.lookup($1);
         if (!sym || sym->kind != Kind::K_FUNC)
             semantic_error("call of non-function", $1);
-        if (sym->params.size() != func_params_type.size())  
+        if (sym->params.size() != delay_symbols.size())  
             semantic_error("function parameter count mismatch in call to function: ", $1);
         for (int i = 0; i < (int) sym->params.size(); ++i)
-            if (sym->params[i] != *func_params_type[i]) 
+            if (sym->params[i] != *delay_symbols[i].type) 
                 semantic_error("function parameter type mismatch in call to function: ", $1);
-        func_params_type.clear();
+        delay_symbols.clear();
         $$ = sym ? &sym->type : (ExtendedType*)T_ERROR;
     }
     ;
@@ -499,6 +502,7 @@ boolean_expr
                   (*$3 == *T_INT  || *$3 == *T_FLOAT || *$3 == *T_BOOL));
         if (!ok)
             semantic_error("comparison type mismatch", "");
+        $$ = T_BOOL;
     }
     | expr LE expr {
         bool ok = (*$1 == *$3 && *$1 != *T_STRING) ||                 
@@ -573,13 +577,28 @@ const_expr
     | SCONST { $$ = T_STRING; }
     ;
 
+array
+    : identifier expr_array_block {
+        Symbol* sym = symtab.lookup($1);
+        if (!sym) semantic_error("undeclared var",$1);
+        if (sym->type.dims.size() != $2->dims.size()) {
+            semantic_error("array dimension mismatch", $1);
+        }
+        $$ = sym ? &sym->type : (ExtendedType*)T_ERROR;
+    }
+    ;
+
 expr_array_block
-    : /* empty */ { $$ = T_ERROR; cout << "emptygkfjgkfjglkfjglkfjglkfjlkgfjklg\n"; }
+    : '[' integer_expr ']' { 
+        vector<int> dims(1);
+        ExtendedType* nt = new ExtendedType{Type::ERROR, dims};
+        type_pool.push_back(nt);
+        $$ = nt;
+    }
     | '[' integer_expr ']' expr_array_block {
         vector<int> dims(1);
         for (auto& _ : $4->dims)
             dims.push_back(1);
-        cout << "times: ffffffffffffffffffffffffffffffffff\n";
         ExtendedType* nt = new ExtendedType{Type::ERROR, dims};
         type_pool.push_back(nt);
         $$ = nt;
@@ -606,9 +625,9 @@ arg_list_opt
 
 arg_list
     : expr 
-      { func_params_type.push_back($1); }
+      { delay_symbols.push_back({"", $1}); }
     | arg_list ',' expr 
-      { func_params_type.push_back($3); }
+      { delay_symbols.push_back({"", $3}); }
     ;
 
 %%           
@@ -616,7 +635,7 @@ arg_list
 void yyerror(const string& msg) {
     cerr << "SYNTAX(" << linenum << "): " << msg << '\n';
     for (auto& ptr : type_pool) delete ptr;
-    // exit(-1);
+    exit(-1);
 }
 
 int main(int argc,char* argv[]){
