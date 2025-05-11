@@ -3,7 +3,7 @@
 #include <cstdlib>
 #include <string.h>
 #include <vector>
-#include "symbolTable.h"
+#include "SymbolTable.h"
 
 using namespace std;
 
@@ -100,7 +100,7 @@ static bool has_main_func = false;
 %nonassoc UMINUS INC DEC
 
 
-%type <tval>  data_type const_expr boolean_expr expr variable_expr
+%type <tval>  data_type boolean_expr expr 
 %type <tval>  array  array_block expr_array_block
 %type <sval>  identifier
 
@@ -127,7 +127,7 @@ declaration
 
 /* ───────── constant expression ───────── */
 const_decl
-    : CONST data_type identifier '=' const_expr ';' {
+    : CONST data_type identifier '=' expr ';' {
         if (!symtab.insert($3, Kind::K_CONST, *$2, {}))
             semantic_error("redeclared const", $3);
         if ($2 != $5)
@@ -163,8 +163,11 @@ init_id_list
 init_id
     : identifier array_block 
       { decl_vars.push_back({$1, $2}); }
-    | identifier '=' const_expr 
-      { decl_vars.push_back({$1, $3}); }
+    | identifier '=' expr { 
+        ExtendedType* nt = new ExtendedType{$3->t, {}};
+        type_pool.push_back(nt);
+        decl_vars.push_back({$1, nt}); 
+    }
     ;
 
 array_block
@@ -281,6 +284,8 @@ simple_stmt
         if (!sym->type.dims.empty())
             semantic_error("try to assign value to an array", $1);
     }
+    | expr
+    | array '=' expr 
     | identifier INC {
         Symbol* sym = symtab.lookup($1);
         if (!sym) 
@@ -381,11 +386,12 @@ return_stmt
         else if (!type_compatible(current_func_type, $2)) 
             semantic_error("return type mismatch", "");
       }
+    | RETURN ';'
     ;
 
 /* ───────── Expression ───────── */
 expr
-    : variable_expr '+' const_expr {
+    : expr '+' expr {
         if (*$1 == *T_STRING || *$3 == *T_STRING) {
             if (*$1 != *$3) 
                 semantic_error("invalid operation", "");
@@ -398,109 +404,31 @@ expr
             $$ = t;
         }
     }
-    | const_expr '+' variable_expr {
-        if (*$1 == *T_STRING || *$3 == *T_STRING) {
-            if (*$1 != *$3) 
-                semantic_error("invalid operation", "");
-            else
-                $$ = T_STRING; 
-        } else {
-            ExtendedType* t = promote($1, $3);
-            if (t == T_ERROR) 
-                semantic_error("invalid operation", "");
-            $$ = t;
-        }
-    }
-    | variable_expr '-' const_expr {
+    | expr '-' expr {
         ExtendedType* t = promote($1, $3);
         if (t == T_ERROR) 
             semantic_error("invalid operation", "");
         $$ = t; 
     }
-    | const_expr '-' variable_expr {
+    | expr '*' expr {
         ExtendedType* t = promote($1, $3);
         if (t == T_ERROR) 
             semantic_error("invalid operation", "");
         $$ = t; 
     }
-    | variable_expr '*' const_expr {
+    | expr '/' expr {
         ExtendedType* t = promote($1, $3);
         if (t == T_ERROR) 
             semantic_error("invalid operation", "");
         $$ = t; 
     }
-    | const_expr '*' variable_expr {
-        ExtendedType* t = promote($1, $3);
-        if (t == T_ERROR) 
-            semantic_error("invalid operation", "");
-        $$ = t; 
-    }
-    | variable_expr '/' const_expr {
-        ExtendedType* t = promote($1, $3);
-        if (t == T_ERROR) 
-            semantic_error("invalid operation", "");
-        $$ = t; 
-    }
-    | const_expr '/' variable_expr {
-        ExtendedType* t = promote($1, $3);
-        if (t == T_ERROR) 
-            semantic_error("invalid operation", "");
-        $$ = t; 
-    }
-    | variable_expr '%' const_expr {
+    | expr '%' expr {
         if (*$1 != *T_INT || *$3 != *T_INT)
             semantic_error("modulo operator requires integer operands", "");
         $$ = T_INT; 
     }
-    | const_expr '%' variable_expr {
-        if (*$1 != *T_INT || *$3 != *T_INT)
-            semantic_error("modulo operator requires integer operands", "");
-        $$ = T_INT; 
-    }
-    | variable_expr
-    | const_expr
-    | boolean_expr
-    ;
-
-variable_expr
-    : variable_expr '+' variable_expr { 
-        if (*$1 == *T_STRING || *$3 == *T_STRING) {
-            if (*$1 != *$3) 
-                semantic_error("invalid operation", "");
-            else
-                $$ = T_STRING; 
-        } else {
-            ExtendedType* t = promote($1, $3);
-            if (t == T_ERROR) 
-                semantic_error("invalid operation", "");
-            $$ = t;
-        }
-    }
-    | variable_expr '-' variable_expr { 
-        ExtendedType* t = promote($1, $3);
-        if (t == T_ERROR) 
-            semantic_error("invalid operation", "");
-        $$ = t; 
-    }
-    | variable_expr '*' variable_expr {
-        ExtendedType* t = promote($1, $3);
-        if (t == T_ERROR) 
-            semantic_error("invalid operation", "");
-        $$ = t; 
-    }
-    | variable_expr '/' variable_expr {
-        ExtendedType* t = promote($1, $3);
-        if (t == T_ERROR) 
-            semantic_error("invalid operation", "");
-        $$ = t; 
-    }
-    | variable_expr '%' variable_expr {
-        if (*$1 != *T_INT || *$3 != *T_INT)
-            semantic_error("modulo operator requires integer operands", "");
-        $$ = T_INT; 
-    }
-    | '-' variable_expr %prec UMINUS  { $$ = $2; }
-    | '(' variable_expr ')'           { $$ = $2; }
+    | '-' expr %prec UMINUS  { $$ = $2; }
+    | '(' expr ')'           { $$ = $2; }
     | identifier {
         Symbol* sym = symtab.lookup($1);
         if (!sym) semantic_error("undeclared var",$1);
@@ -523,6 +451,11 @@ variable_expr
         delay_symbols.clear();
         $$ = sym ? &sym->type : (ExtendedType*)T_ERROR;
     }
+    | FCONST { $$ = T_FLOAT; }
+    | BCONST { $$ = T_BOOL; }
+    | SCONST { $$ = T_STRING; }
+    | ICONST { $$ = T_INT; }
+    | boolean_expr
     ;
 
 boolean_expr
@@ -591,47 +524,6 @@ boolean_expr
     }
     ;
 
-
-const_expr  
-    : const_expr '+' const_expr { 
-        if (*$1 == *T_STRING || *$3 == *T_STRING) {
-            if (*$1 != *$3) 
-                semantic_error("invalid operation", "");
-            else
-                $$ = T_STRING; 
-        } else {
-            ExtendedType* t = promote($1, $3);
-            if (t == T_ERROR) 
-                semantic_error("invalid operation", "");
-            $$ = t;
-        }
-    }
-    | const_expr '-' const_expr { 
-        ExtendedType* t = promote($1, $3);
-        if (t == T_ERROR) 
-            semantic_error("invalid operation", "");
-        $$ = t; 
-    }
-    | const_expr '*' const_expr {
-        ExtendedType* t = promote($1, $3);
-        if (t == T_ERROR) 
-            semantic_error("invalid operation", "");
-        $$ = t; 
-    }
-    | const_expr '/' const_expr {
-        ExtendedType* t = promote($1, $3);
-        if (t == T_ERROR) 
-            semantic_error("invalid operation", "");
-        $$ = t; 
-    }
-    | '-' const_expr %prec UMINUS  { $$ = $2; }
-    | '(' const_expr ')'           { $$ = $2; }
-    | FCONST { $$ = T_FLOAT; }
-    | BCONST { $$ = T_BOOL; }
-    | SCONST { $$ = T_STRING; }
-    | ICONST { $$ = T_INT; }
-    ;
-
 array
     : identifier expr_array_block {
         Symbol* sym = symtab.lookup($1);
@@ -644,7 +536,7 @@ array
     ;
 
 expr_array_block
-    : '[' const_expr ']' { 
+    : '[' expr ']' { 
         if ($2 != T_INT)
             semantic_error("array dimension not integer", "");
         vector<int> dims(1);
@@ -652,7 +544,7 @@ expr_array_block
         type_pool.push_back(nt);
         $$ = nt;
     }
-    | '[' const_expr ']' expr_array_block {
+    | '[' expr ']' expr_array_block {
         if ($2 != T_INT)
             semantic_error("array dimension not integer", "");
         vector<int> dims(1);

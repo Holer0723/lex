@@ -15,7 +15,7 @@ Y_TAB_H   = y.tab.h
 LEX_C     = lex.yy.c
 
 # 物件檔
-OBJS      = y.tab.o lex.yy.o symbolTable.o
+OBJS      = y.tab.o lex.yy.o SymbolTable.o
 
 # 主要規則
 all: $(TARGET)
@@ -36,9 +36,9 @@ $(LEX_C): scanner.l $(Y_TAB_H)
 lex.yy.o: $(LEX_C)
 	$(CXX) $(CXXFLAGS) -c $(LEX_C) -o lex.yy.o
 
-# 編譯 symbolTable
-symbolTable.o: symbolTable.cpp symbolTable.h
-	$(CXX) $(CXXFLAGS) -c symbolTable.cpp -o symbolTable.o
+# 編譯 SymbolTable
+SymbolTable.o: SymbolTable.cpp SymbolTable.h
+	$(CXX) $(CXXFLAGS) -c SymbolTable.cpp -o SymbolTable.o
 
 # 連結所有物件檔
 $(TARGET): $(OBJS)
@@ -46,6 +46,10 @@ $(TARGET): $(OBJS)
 
 # 清理
 clean:
-	rm -f $(TARGET) $(Y_TAB_C) $(Y_TAB_H) $(LEX_C) *.o
+	rm -f $(TARGET) $(Y_TAB_C) $(Y_TAB_H) $(LEX_C) *.OBJ
+
+test: $(TARGET)
+	./$(TARGET) mycase.sd
+	
 
 .PHONY: all clean

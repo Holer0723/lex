@@ -1,7 +1,7 @@
 %{
 #include <iostream>
 #include <string>
-#include "symbolTable.h"
+#include "SymbolTable.h"
 #include "y.tab.h"
 
 using namespace std;
@@ -42,12 +42,10 @@ char* make_string(const char* str, int length) {
 #define tokenInteger(tok, s) { LIST cout << '<' << tok << ":" << s << ">\n"; }
 %}
 
-print           print
 
 id              [a-zA-Z_][_a-zA-Z0-9]*
 integer         [+-]?[0-9]+
-string          \"([^"])*\"
-relational      (<|<=|>=|>|==|!=)
+string          \"([^\"]|\"\")*\"
 mulcomment      "/*"([^*]|\*+[^*/])*\*+"/\n"
 real            [+-]?([0-9]+\.[0-9]*|\.[0-9]+)([Ee][+-]?[0-9]+)?
 
@@ -65,8 +63,8 @@ real            [+-]?([0-9]+\.[0-9]*|\.[0-9]+)([Ee][+-]?[0-9]+)?
 ")"                    { token("')'"); return ')'; }
 "{"                    { token("'{'"); return '{'; }
 "}"                    { token("'}'"); return '}'; }
-"]"                    { token("']'"); return ']'; }
 "["                    { token("'['"); return '['; }
+"]"                    { token("']'"); return ']'; }
 
 "=="                   { token("=="); return EQ; }
 "!="                   { token("!="); return NE; }
