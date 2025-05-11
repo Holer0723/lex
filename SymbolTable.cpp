@@ -35,7 +35,7 @@ Symbol* SymbolTable::lookup(const string& id) {
 void SymbolTable::dump() {
 
     auto printTable = [&](const unordered_map<string, Symbol>& table) -> void {
-        cout << "───────── SymbolTable ─────────\n"; 
+        cout << "─────── SymbolTable dump ────── \n"; 
         for (auto it : table) {
             cout << it.second.name << ' ' << kind2Str(it.second.kind) << ' ' << type2Str(it.second.type.t) << '\n';
         }
