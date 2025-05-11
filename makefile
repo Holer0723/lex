@@ -48,8 +48,8 @@ $(TARGET): $(OBJS)
 clean:
 	rm -f $(TARGET) $(Y_TAB_C) $(Y_TAB_H) $(LEX_C) *.OBJ
 
-test: $(TARGET)
-	./$(TARGET) mycase.sd
+run-test: $(TARGET)
+	./$(TARGET) test/mycase.sd
 	
 
 .PHONY: all clean

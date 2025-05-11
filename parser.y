@@ -130,7 +130,7 @@ const_decl
     : CONST data_type identifier '=' expr ';' {
         if (!symtab.insert($3, Kind::K_CONST, *$2, {}))
             semantic_error("redeclared const", $3);
-        if ($2 != $5)
+        if (!type_compatible($2, $5))
             semantic_error("const type mismatch", $3);
         if ($2 == T_VOID) 
             semantic_error("cannot declare a void type constant", $3);
@@ -173,6 +173,8 @@ init_id
 array_block
     : /* empty */ { $$ = T_ERROR; }
     | '[' ICONST ']' array_block {
+        if ($2 < 1)
+            semantic_error("array dimension cannot less than 1", "");
         vector<int> dims;
         dims.push_back($2);
         for (auto& d : $4->dims)
@@ -285,7 +287,10 @@ simple_stmt
             semantic_error("try to assign value to an array", $1);
     }
     | expr
-    | array '=' expr 
+    | array '=' expr {
+        if (!type_compatible($1, $3))
+            semantic_error("type mismatch", "");
+    }
     | identifier INC {
         Symbol* sym = symtab.lookup($1);
         if (!sym) 
@@ -327,8 +332,10 @@ simple_stmt
     ;
 
 if_stmt
-    : IF '(' boolean_expr ')' simple_or_block_stmt
+    : IF '(' boolean_expr ')' simple_or_block_stmt 
+      { if ($3 != T_BOOL) semantic_error("if cond not bool",""); }
     | IF '(' boolean_expr ')' simple_or_block_stmt ELSE simple_or_block_stmt
+      { if ($3 != T_BOOL) semantic_error("if cond not bool",""); }
     ;
 
 while_stmt
@@ -445,9 +452,19 @@ expr
             semantic_error("call of non-function", $1);
         if (sym->params.size() != delay_symbols.size())  
             semantic_error("function parameter count mismatch in call to function: ", $1);
-        for (int i = 0; i < (int) sym->params.size(); ++i)
-            if (sym->params[i] != *delay_symbols[i].type) 
+        for (int i = 0; i < (int) sym->params.size(); ++i) {
+            if ((!delay_symbols[i].type->dims.empty() && !sym->params[i].dims.empty()) &&
+                 delay_symbols[i].type->dims.size() != sym->params[i].dims.size())
+                semantic_error("parameter array dimension count mismatch in", $1);
+            if ((!delay_symbols[i].type->dims.empty() && !sym->params[i].dims.empty()) && 
+                 !delay_symbols[i].type->dims.empty()) {
+                for (int j = 0; j < (int) delay_symbols[i].type->dims.size(); ++j)
+                    if (delay_symbols[i].type->dims[j] != sym->params[i].dims[j])
+                        semantic_error("parameter array dimension mismatch in", $1);
+            }
+            if (!type_compatible(delay_symbols[i].type, &sym->params[i])) 
                 semantic_error("function parameter type mismatch in call to function: ", $1);
+        }
         delay_symbols.clear();
         $$ = sym ? &sym->type : (ExtendedType*)T_ERROR;
     }
