@@ -96,4 +96,16 @@ line numbers come from the lexer’s global `linenum`.
     ``` c
     3 + 4.5 // result type: float
     ```
+5. Global ban on “variable ≠ function” name collision
+
+    A variable identifier is forbidden from re‑using any function name that exists in the program,
+    regardless of scope.
+    ```c
+    int foo() { … }     // function ‘foo’
+    …
+    int foo = 10;       // ← semantic error: variable name conflicts with existing function
+    ```
+    triggers `SEMANTIC(line): variable name conflicts with existing function`
+    > This requirement was specified by the professor during the lecture.
+
     
