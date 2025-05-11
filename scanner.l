@@ -51,7 +51,7 @@ real            [+-]?([0-9]+\.[0-9]*|\.[0-9]+)([Ee][+-]?[0-9]+)?
 
 %%
 
-"//".*\n                { cout << linenum++ << ": " << yytext; }
+"//".*                 { LIST }
 
 {mulcomment}           { multicomment(yytext, yyleng); }
 

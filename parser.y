@@ -132,7 +132,7 @@ const_decl
             semantic_error("redeclared const", $3);
         if (!type_compatible($2, $5))
             semantic_error("const type mismatch", $3);
-        if ($2 == T_VOID) 
+        if (*$2 == *T_VOID) 
             semantic_error("cannot declare a void type constant", $3);
     }
     ;
@@ -141,11 +141,15 @@ const_decl
 /* ───────── variable declaration ───────── */
 var_decl
     : data_type init_id_list ';' { 
-        if ($1 == T_VOID)
+        if (*$1 == *T_VOID)
             semantic_error("cannot decalre a void type variable", "");
         for (auto& var : decl_vars) {
             string name = var.id;
             ExtendedType* type = var.type;
+            Symbol* sym = symtab.lookup(name);
+            if (sym) 
+                if (sym->kind == Kind::K_FUNC)
+                    semantic_error("variable name conflicts with existing function", "");
             if (!symtab.insert(name, Kind::K_VAR, ExtendedType{$1->t, type->dims}, {}))
                 semantic_error("redeclared var", name);
             if (type->t != Type::ERROR && !type_compatible(type, $1))
@@ -220,7 +224,7 @@ param_list
 
 param
     : data_type identifier array_block { 
-        if ($1 == T_VOID) 
+        if (*$1 == *T_VOID) 
             semantic_error("function parameter cannot be of void type", $2);
         ExtendedType* nt = new ExtendedType{$1->t, $3->dims};
         delay_symbols.push_back({$2, nt});
@@ -277,7 +281,7 @@ simple_stmt
             semantic_error("undeclared id",$1);
         if (sym->kind == Kind::K_FUNC)
             semantic_error("try to assign to a function: ", $1);
-        if ($3 == T_VOID)
+        if (*$3 == *T_VOID)
             semantic_error("cannot assign result of void function", "");
         if (sym->kind == Kind::K_CONST)
             semantic_error("try to assign to a constant: ", $1);
@@ -333,19 +337,19 @@ simple_stmt
 
 if_stmt
     : IF '(' boolean_expr ')' simple_or_block_stmt 
-      { if ($3 != T_BOOL) semantic_error("if cond not bool",""); }
+      { if (*$3 != *T_BOOL) semantic_error("if cond not bool",""); }
     | IF '(' boolean_expr ')' simple_or_block_stmt ELSE simple_or_block_stmt
-      { if ($3 != T_BOOL) semantic_error("if cond not bool",""); }
+      { if (*$3 != *T_BOOL) semantic_error("if cond not bool",""); }
     ;
 
 while_stmt
     : WHILE '(' boolean_expr ')' simple_or_block_stmt
-      { if ($3 != T_BOOL) semantic_error("if cond not bool",""); }
+      { if (*$3 != *T_BOOL) semantic_error("if cond not bool",""); }
     ;
 
 for_stmt 
     : FOR '(' simple_stmt ';'  boolean_expr ';' simple_stmt ')' simple_or_block_stmt 
-       { if ($5 != T_BOOL) semantic_error("if cond not bool",""); }
+       { if (*$5 != *T_BOOL) semantic_error("if cond not bool",""); }
     ;
 
 foreach_stmt
@@ -388,7 +392,7 @@ foreach_stmt
 
 return_stmt
     : RETURN expr ';' {
-        if (current_func_type == T_VOID)
+        if (*current_func_type == *T_VOID)
             semantic_error("void function should not return value", "");
         else if (!type_compatible(current_func_type, $2)) 
             semantic_error("return type mismatch", "");
@@ -554,7 +558,7 @@ array
 
 expr_array_block
     : '[' expr ']' { 
-        if ($2 != T_INT)
+        if (*$2 != *T_INT && *$2 != *T_BOOL)
             semantic_error("array dimension not integer", "");
         vector<int> dims(1);
         ExtendedType* nt = new ExtendedType{Type::ERROR, dims};
@@ -562,7 +566,7 @@ expr_array_block
         $$ = nt;
     }
     | '[' expr ']' expr_array_block {
-        if ($2 != T_INT)
+        if (*$2 != *T_INT && *$2 != *T_BOOL)
             semantic_error("array dimension not integer", "");
         vector<int> dims(1);
         for (auto& _ : $4->dims)
