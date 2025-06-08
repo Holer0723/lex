@@ -9,7 +9,6 @@
 
 using namespace std;
 
-
 namespace dbg {
 
     /* ------ 內部遞迴展開 ------ */
@@ -185,7 +184,7 @@ const_decl
         $$->code += $5->code;
         bool inGlobal = symtab.depth() == 1;
         if (inGlobal) {
-            emitter.declareField($2, $3, CodeEmitter::getLiteralOf($5->lit));
+            emitter.declareField($2, $3, CodeEmitter::getLiteralOf($5->lit), true);
         } else {         
             int idx = symbolIndex++;
             sym->index = idx;
@@ -226,11 +225,11 @@ var_decl
                 semantic_error("redeclared var", name);
             
             /* Check initializer / array dims consistency */
-            if (type->t != Type::ERROR && !type_compatible(type, $1))
+            if (type->t != Type::ERROR && !type_compatible($1, type))
                 semantic_error("type mismatch in init", "");
 
             if (inGlobal) {
-                emitter.declareField($1, name, CodeEmitter::getLiteralOf(type->lit));
+                emitter.declareField($1, name, CodeEmitter::getLiteralOf(type->lit), false);
             } else {                                              
                 int idx = symbolIndex++;
                 Symbol* sym = symtab.lookup(name);
@@ -314,7 +313,6 @@ func_decl
         
 
         Symbol *sym = symtab.lookup($2);
-        if (!sym) dbg::debug("dsddd");
         for (auto& p : delay_symbols) 
             sym->params.push_back(*p.type);
 
@@ -325,14 +323,17 @@ func_decl
 
         if (string($2) == "main") {
             has_main_func = true;
-            emitter.beginMethod($1, $2, param_type, true);
+            emitter.beginMethod($1, $2, param_type);
         } else {
-            emitter.beginMethod($1, $2, param_type, false);
+            emitter.beginMethod($1, $2, param_type);
         }
 
     } block { /* function body */
         current_func_type = new ExtendedType{Type::ERROR, {}};;
         emitter.emit($<tval>8->code);
+        if ($1->t == Type::VOID) {
+            emitter.emit(emitter.emitRETURN());
+        }
         emitter.endMethod();
     }
     ;
@@ -447,6 +448,38 @@ statement
         $$ = new ExtendedType{Type::ERROR, {}};
         $$->code += $1->code; 
     }
+    | identifier '(' arg_list_opt ')' {
+        /*  Function call  */
+        Symbol* sym = symtab.lookup($1);
+        if (!sym || sym->kind != Kind::K_FUNC)
+            semantic_error("call of non-function", $1);
+        if (sym->params.size() != delay_symbols.size())  
+            semantic_error("function parameter count mismatch in call to function: ", $1);
+        
+        /*  Per‑parameter checks (dims + base type) */
+        for (size_t i = 0; i < sym->params.size(); ++i) {
+            /* dimension consistency */
+            if (!delay_symbols[i].type->dims.empty() && !sym->params[i].dims.empty() &&
+                 delay_symbols[i].type->dims.size() != sym->params[i].dims.size())
+                semantic_error("array rank mismatch in arg", $1);
+            
+            if (!delay_symbols[i].type->dims.empty() && !sym->params[i].dims.empty() && 
+                 !delay_symbols[i].type->dims.empty()) {
+                for (size_t j = 0; j < delay_symbols[i].type->dims.size(); ++j)
+                    if (delay_symbols[i].type->dims[j] != sym->params[i].dims[j])
+                        semantic_error("array dim mismatch in arg", $1);
+            }
+            /* base type */
+            if (!type_compatible(delay_symbols[i].type, &sym->params[i])) 
+                semantic_error("type mismatch in arg", $1);
+        }
+        delay_symbols.clear();
+
+
+        $$ = &sym->type;
+        $$->code = $3->code;
+        $$->code += emitter.emitInvokeStatic(sym->type, $1, sym->params.size());
+    }
     ;
 
 /*  Either a single statement or a nested block (for if/while bodies). */
@@ -485,13 +518,6 @@ simple_stmt
             $$->code += emitter.emitStoreInt(sym->index);
         }
     }
-    | expr {
-        $$ = new ExtendedType{Type::ERROR, {}};
-    }
-    | array '=' expr {
-        if (!type_compatible($1, $3))
-            semantic_error("type mismatch", "");
-    }
     | identifier INC {
         Symbol* sym = symtab.lookup($1);
         if (!sym) 
@@ -503,7 +529,7 @@ simple_stmt
         if (sym->type.t != Type::INT && sym->type.t != Type::FLOAT) 
             semantic_error("++ requires numeric operand", $1);
         
-        $$ = new ExtendedType{Type::ERROR, {}};
+        $$ = new ExtendedType{Type::INT, {}};
         if (sym->index == -1) {
             $$->code += emitter.emitGetStaticInt($1);
         } else {
@@ -516,6 +542,8 @@ simple_stmt
         } else {
             $$->code += emitter.emitStoreInt(sym->index);
         }
+
+        dbg::debug($$->code);
     }
     | identifier DEC {
         Symbol* sym = symtab.lookup($1);
@@ -528,19 +556,23 @@ simple_stmt
         if (sym->type.t != Type::INT && sym->type.t != Type::FLOAT)
             semantic_error("-- requires numeric operand", $1);        
             
-        $$ = new ExtendedType{Type::ERROR, {}};
+        $$ = new ExtendedType{Type::INT, {}};
         if (sym->index == -1) {
             $$->code += emitter.emitGetStaticInt($1);
         } else {
             $$->code += emitter.emitLoadInt(sym->index);
         }
         $$->code += emitter.emitLoadConstantInt(1);
-        $$->code += emitter.emitIADD();
+        $$->code += emitter.emitISUB();
         if (sym->index == -1) {
             $$->code += emitter.emitPutStatic(sym->type, $1);
         } else {
             $$->code += emitter.emitStoreInt(sym->index);
         }
+    }
+    | array '=' expr {
+        if (!type_compatible($1, $3))
+            semantic_error("type mismatch", "");
     }
     | PRINT   expr {
         if ($2->t == Type::VOID) 
@@ -853,7 +885,7 @@ expr
 
 
         $$ = &sym->type;
-        $$->code += $3->code;
+        $$->code = $3->code;
         $$->code += emitter.emitInvokeStatic(sym->type, $1, sym->params.size());
     }
     | FCONST { 
@@ -866,7 +898,6 @@ expr
         $$->code = emitter.emitLoadConstantInt($1);
     }
     | SCONST { 
-        dbg::debug($1);
         $$ = new ExtendedType{Type::STRING, {}}; 
         $$->lit.tag = Literal::STR;
         $$->lit.sval = $1;
@@ -1044,6 +1075,62 @@ expr
         $$->code += $1->code + $3->code;
         $$->code += emitter.emitIOR();
     }
+    | identifier INC {
+        Symbol* sym = symtab.lookup($1);
+        if (!sym) 
+            semantic_error("undeclared id",$1);
+        if (sym->kind == Kind::K_FUNC)
+            semantic_error("invalid ++ on function", $1);
+        if (sym->kind == Kind::K_CONST)
+            semantic_error("invalid ++ on constant", $1);
+        if (sym->type.t != Type::INT && sym->type.t != Type::FLOAT) 
+            semantic_error("++ requires numeric operand", $1);
+        
+        $$ = new ExtendedType{Type::INT, {}};
+        if (sym->index == -1) {
+            $$->code += emitter.emitGetStaticInt($1);
+            $$->code += emitter.emitGetStaticInt($1);
+        } else {
+            $$->code += emitter.emitLoadInt(sym->index);
+            $$->code += emitter.emitLoadInt(sym->index);
+        }
+        $$->code += emitter.emitLoadConstantInt(1);
+        $$->code += emitter.emitIADD();
+        if (sym->index == -1) {
+            $$->code += emitter.emitPutStatic(sym->type, $1);
+        } else {
+            $$->code += emitter.emitStoreInt(sym->index);
+        }
+
+        dbg::debug($$->code);
+    }
+    | identifier DEC {
+        Symbol* sym = symtab.lookup($1);
+        if (!sym) 
+            semantic_error("undeclared id",$1);
+        if (sym->kind == Kind::K_FUNC)
+            semantic_error("invalid -- on function", $1);
+        if (sym->kind == Kind::K_CONST)
+            semantic_error("invalid -- on constant", $1);
+        if (sym->type.t != Type::INT && sym->type.t != Type::FLOAT)
+            semantic_error("-- requires numeric operand", $1);        
+            
+        $$ = new ExtendedType{Type::INT, {}};
+        if (sym->index == -1) {
+            $$->code += emitter.emitGetStaticInt($1);
+            $$->code += emitter.emitGetStaticInt($1);
+        } else {
+            $$->code += emitter.emitLoadInt(sym->index);
+            $$->code += emitter.emitLoadInt(sym->index);
+        }
+        $$->code += emitter.emitLoadConstantInt(1);
+        $$->code += emitter.emitISUB();
+        if (sym->index == -1) {
+            $$->code += emitter.emitPutStatic(sym->type, $1);
+        } else {
+            $$->code += emitter.emitStoreInt(sym->index);
+        }
+    }
     ;
 
 /*  array = identifier '['expr']'...  (rank is checked vs declaration) */
@@ -1152,9 +1239,9 @@ int main(int argc,char* argv[]){
         return fname;
     };
 
-    ofstream ofs("output.j");
-    emitter.setOutputStream(ofs);
     string className = fileStem(argv[1]);
+    ofstream ofs(className + ".j");
+    emitter.setOutputStream(ofs);
     emitter.openClass(className);
 
     if (yyparse() == 0) {

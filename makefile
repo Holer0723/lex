@@ -49,11 +49,11 @@ $(TARGET): $(OBJS)
 
 # 清理
 clean:
-	rm -f $(TARGET) $(Y_TAB_C) $(Y_TAB_H) $(LEX_C) output.j mycase.class *.OBJ
+	rm -f $(TARGET) $(Y_TAB_C) $(Y_TAB_H) $(LEX_C) mycase.j mycase.class $(OBJS)
 
 run-test: $(TARGET)
 	./$(TARGET) test/mycase.sd
-	./javaa output.j
+	./javaa mycase.j
 	java mycase
 	
 

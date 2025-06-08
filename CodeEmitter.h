@@ -38,12 +38,10 @@ public:
     string newLabel(); 
     string getLebelCounter();
 
-    int newSymbol();
-    int getSymbolCounter();
 
-    void declareField(const ExtendedType* type, const string& id, const string val);
+    void declareField(const ExtendedType* type, const string& id, const string val, bool isConst);
 
-    void beginMethod(const ExtendedType* ret_type, const string& id, const vector<string>& params, bool isMain);
+    void beginMethod(const ExtendedType* ret_type, const string& id, const vector<string>& params);
     void endMethod();
 
     string emitLoadInt(int index);

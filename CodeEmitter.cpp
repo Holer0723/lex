@@ -3,7 +3,7 @@
 
 // Forward declare SymbolTable stuff if needed, or include its header
 
-CodeEmitter::CodeEmitter() : labelCounter(0), out_stream(&cout), current_class_name_("example"), isMain(false) {} // Default class name
+CodeEmitter::CodeEmitter() : labelCounter(0), out_stream(&cout), current_class_name_("example") {} // Default class name
 
 void CodeEmitter::openClass(const std::string &cls) {
     current_class_name_ = cls;
@@ -23,18 +23,18 @@ void CodeEmitter::emitLine(const string& line) { (*out_stream) << line << endl; 
 void CodeEmitter::emit(const string& ele) { (*out_stream) << ele; }
 void CodeEmitter::emitComment(const string& comment) { (*out_stream) << "; " << comment << endl; }
 
-string CodeEmitter::emitLabel(const string& label) { return label + ":\n"; }
+string CodeEmitter::emitLabel(const string& label) { return label + ": nop\n"; }
 
 string CodeEmitter::newLabel() { return to_string(labelCounter++); }
 string CodeEmitter::getLebelCounter() { return to_string(labelCounter); }
 
 
-void CodeEmitter::declareField(const ExtendedType* type, const string& id, const string val) {
-    (*out_stream) << "field static " << getJasminUserType(type) << " " << id << (val != "None" ? " = " + val : "") << endl;
+void CodeEmitter::declareField(const ExtendedType* type, const string& id, const string val, bool isConst) {
+    (*out_stream) << "field static " << (isConst ? "final " : "") << getJasminUserType(type) << " " << id << (val != "None" ? " = " + val : "") << endl;
 }
 
 
-void CodeEmitter::beginMethod(const ExtendedType* ret_type, const string& id, const vector<string>& params, bool isMain = false) {
+void CodeEmitter::beginMethod(const ExtendedType* ret_type, const string& id, const vector<string>& params) {
     string sig;
     sig += '(';
     if (id == "main") {
@@ -51,13 +51,10 @@ void CodeEmitter::beginMethod(const ExtendedType* ret_type, const string& id, co
     emitLine("max_stack 100");
     emitLine("max_locals 100");
     emitLine("{");
-    this->isMain = isMain;
 }
 
 void CodeEmitter::endMethod() {
-    if (isMain) emitLine("return");
     emitLine("}");
-    this->isMain = false;
 }
 
 // --- JVM Type Helpers (PA3 Specific) ---
@@ -66,7 +63,7 @@ string CodeEmitter::getLiteralOf(const Literal lit) {
     switch (lit.tag) {
         case Literal::INT: return to_string(lit.ival);
         case Literal::BOOL: return to_string(lit.bval);
-        case Literal::STR: return lit.sval;
+        case Literal::STR: return "\"" + lit.sval + "\"";
         default: return "None";
     }
 }

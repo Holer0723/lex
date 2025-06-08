@@ -4,7 +4,7 @@ tags: [Compiler]
 
 ---
 
-# Programming Assignment 2 Syntactic and Semantic Definitions
+# Programming Assignment 3: Code Generation for sD
 
 > *NTUST / Compiler 2025 Spring* – **C++ 11**, GNU Flex & Bison  
 > Author : 何喬熒   Student ID : B11115036
@@ -13,25 +13,26 @@ tags: [Compiler]
 
 ## 1 | Directory Layout
 
-| Path | Purpose |
-|------|---------|
-| `parser.y` | Bison grammar (+ semantic actions) |
-| `scanner.l` | Flex lexer (keywords, literals, comments …) |
-| `SymbolTable.{h,cpp}` | Multi‑scope symbol table & function signatures |
-| `makefile` | One‑command build (`make` / `make clean` / `make run-test`) |
-| `test/` | Sample `.sd` source files |
-| *generated* | `y.tab.c/h`, `lex.yy.c`, `*.o`, executable |
+| Path                  | Purpose                                                                       |
+| :-------------------- | :---------------------------------------------------------------------------- |
+| `parser.y`            | Bison grammar definitions (+ semantic actions + **code generation actions**)  |
+| `scanner.l`           | Flex lexer (keywords, literals, comments, etc.)                               |
+| `SymbolTable.{h,cpp}` | Multi-scope symbol table & function signatures (possibly updated for codegen) |
+| `CodeEmitter.{h,cpp}` | **(New)** Helper class for generating Java assembly code (Jasmin format)     |
+| `makefile`            | One-command build (`make`, `make clean`, `make run-test`) |
+| `test/`               | Sample `.sd` source files                                                     |
+| `javaa`               | **(Provided)** Java Assembler (converts `.j` files to `.class` files)       |
+| *generated*           | `y.tab.c/h`, `lex.yy.c`, `*.o`, `mycompiler` (executable), `*.j` (Jasmin file), `*.class` (Java bytecode) |
 
 ---
 
 ## 2 | Language Features
 
-* **Primitive types** `int float bool string void`
-* **Arrays** – arbitrary dimension (`int a[3][4];`)
-* **Functions** – full signature/type check (arrays included)
+* **Primitive types** `int` `bool` `void`
+* **Functions** – full signature/type check
 * **Statements**  
-  `if / else`, `while`, `for`, `foreach (i : lo .. hi)`, `break`, `continue`, `return`, block `{ … }`
-* Built‑ins `print`, `println`, `read`
+  `if / else`, `while`, `for`, `foreach (i : lo .. hi)`, `return`, block `{ … }`
+* Built‑ins `print`, `println`
 * **Semantic diagnostics**  duplicate/undeclared id, mismatched types, missing `main`, etc.
 
 ---
@@ -41,7 +42,9 @@ tags: [Compiler]
 ```bash
 sudo apt install g++ flex bison        # once, on Debian/Ubuntu
 make                                   # build ./mycompiler
-make clean                             # remove intermediates
+
+
+make clean                             # remove all generated file
 ```
 
 ## 4 | Run
@@ -51,14 +54,34 @@ make run-test
 
 # run your own test case
 ./mycompiler path/to/source.sd
+./javaa source.j
+java source
 ```
-* On success prints `PASS – no errors`
-* Syntax / semantic errors are reported as
+* **Compiler Success Message**: On successful compilation, mycompiler should print a message like `PASS – no errors` and generate the `.j` file.
+
+* Syntax / semantic errors are reported as
 ```bash
 SYNTAX(23): unexpected token ...
 SEMANTIC(41): type mismatch in assignment a
 ```
-line numbers come from the lexer’s global `linenum`.
+> line numbers come from the lexer’s global `linenum`.
+
+### Example Workflow and Output:
+Let's assume `test/example.sd` contains the following sD code:
+```c++
+// test/example.sd
+void main() {
+  int x = 10;
+  int y = 20;
+  println x + y;
+  print "Hello, sD!";
+}
+```
+After running the three steps above (`./mycompiler test/example.sd`, `./javaa example.j`, `java example`), the expected output on the console would be:
+```
+30
+Hello, sD!
+```
 
 ## 5 | Type‑Checking Rules
 
@@ -67,45 +90,7 @@ line numbers come from the lexer’s global `linenum`.
 | `!x`, `x && y`, `x \|\| y` | **bool only**                                                 | non‑bool → `logical operand not bool`   |
 | `==`, `!=`                 | same type (string allowed)<br>or *(int ∣ float ∣ bool) mixed* | string can be compared only to string   |
 | `< > <= >=`                | same type (string not allowed)<br>or *(int ∣ float ∣ bool) mixed* |                                         |
-| assignment                 | destination / source must satisfy `type_compatible()`         | `int ⇄ float`, `bool→int/float` allowed |
+| assignment                 | destination / source must satisfy `type_compatible()`         | `bool→int` allowed |
 | return                     | expression must be compatible with function return type       | void fn must not return value           |
-
-## 6 | Extra Features Implemented
-
-1. **`return ;` (empty return)**    
-   A naked `return;` is accepted inside functions whose declared return type is `void`.
-   ``` c
-    void func() {
-        return ;
-    }
-    ```
-
-2. **Mixed declarator list can include arrays**    
-    ```c
-   int a, arr[2][3];
-    ```
-    Multiple variables—scalars and multi‑dimensional arrays—can be declared in the same statement.
-
-3. Initializer can be any expression or function call 
-    ```c
-    int a = b + c,  x = add(b, c);
-    ```
-4. Implicit numeric promotion in arithmetic expressions
-
-    When an int and a float appear in the same arithmetic expression,the int is implicitly promoted to float and the result type becomes float.
-    ``` c
-    3 + 4.5 // result type: float
-    ```
-5. Global ban on “variable ≠ function” name collision
-
-    A variable identifier is forbidden from re‑using any function name that exists in the program,
-    regardless of scope.
-    ```c
-    int foo() { … }     // function ‘foo’
-    …
-    int foo = 10;       // ← semantic error: variable name conflicts with existing function
-    ```
-    triggers `SEMANTIC(line): variable name conflicts with existing function`
-    > This requirement was specified by the professor during the lecture.
 
     

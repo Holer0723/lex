@@ -10,3 +10,5 @@ javaaf
 javaa
 *.j
 *.class
+ppc/
+compiler
