@@ -15,7 +15,7 @@ Y_TAB_H   = y.tab.h
 LEX_C     = lex.yy.c
 
 # 物件檔
-OBJS      = y.tab.o lex.yy.o SymbolTable.o
+OBJS      = y.tab.o lex.yy.o SymbolTable.o CodeEmitter.o
 
 # 主要規則
 all: $(TARGET)
@@ -40,16 +40,21 @@ lex.yy.o: $(LEX_C)
 SymbolTable.o: SymbolTable.cpp SymbolTable.h
 	$(CXX) $(CXXFLAGS) -c SymbolTable.cpp -o SymbolTable.o
 
+CodeEmitter.o: CodeEmitter.cpp CodeEmitter.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
 # 連結所有物件檔
 $(TARGET): $(OBJS)
 	$(CXX) $(CXXFLAGS) -o $(TARGET) $(OBJS) -ll
 
 # 清理
 clean:
-	rm -f $(TARGET) $(Y_TAB_C) $(Y_TAB_H) $(LEX_C) *.OBJ
+	rm -f $(TARGET) $(Y_TAB_C) $(Y_TAB_H) $(LEX_C) output.j mycase.class *.OBJ
 
 run-test: $(TARGET)
 	./$(TARGET) test/mycase.sd
+	./javaa output.j
+	java mycase
 	
 
 .PHONY: all clean

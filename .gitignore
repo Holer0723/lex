@@ -1,6 +1,12 @@
 *.sd
 *.o
+*.txt
 mycompiler
 y.tab.*
 lex.yy.c
 parser.tab.*
+.vscode/
+javaaf
+javaa
+*.j
+*.class

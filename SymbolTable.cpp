@@ -18,9 +18,12 @@ void SymbolTable::popScope() {
     scopes.pop_back();
 }
 
+int SymbolTable::depth() {
+    return scopes.size();
+}
 
 bool SymbolTable::insert(const string& id, Kind kind, ExtendedType type, vector<ExtendedType> params) {
-    Symbol sym = Symbol{id, kind, type, params};
+    Symbol sym = Symbol{-1, id, kind, type, params};
     return scopes.back().emplace(id, sym).second;
 }
 
@@ -42,7 +45,6 @@ void SymbolTable::dump() {
         cout << "───────── SymbolTable ─────────\n"; 
     };
     printTable(scopes.back());
-    
 }
 
 const string SymbolTable::kind2Str(Kind k) {
@@ -56,11 +58,11 @@ const string SymbolTable::kind2Str(Kind k) {
 
 const string SymbolTable::type2Str(Type t) {
     switch (t) {
-        case Type::INT:    return "INT";
-        case Type::FLOAT:  return "FLOAT";
-        case Type::BOOL:   return "BOOL";
-        case Type::STRING: return "STRING";
-        case Type::VOID:   return "VOID";
-        default:           return "ERROR";
+        case Type::INT:    return "int";
+        case Type::FLOAT:  return "float";
+        case Type::BOOL:   return "bool";
+        case Type::STRING: return "string";
+        case Type::VOID:   return "void";
+        default:           return "error";
     }
 }
